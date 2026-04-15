@@ -361,7 +361,7 @@ export async function executePreparedCliRun(
               cancel: () => {
                 managedRun.cancel("manual-cancel");
               },
-              isStreaming: () => false,
+              isStreaming: () => Boolean(streamingParser),
             }
           : undefined;
         if (replyBackendHandle) {
