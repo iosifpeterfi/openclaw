@@ -421,6 +421,11 @@ export async function executePreparedCliRun(
           onStdout: streamingParser ? (chunk: string) => streamingParser.push(chunk) : undefined,
         });
         let replyBackendCompleted = false;
+        if (process.env.OPENCLAW_CLI_STREAM_DEBUG === "1") {
+          console.error(
+            `[cli-stream-debug] replyOperation=${params.replyOperation ? "YES" : "NO"} streamingParser=${streamingParser ? "YES" : "NO"}`,
+          );
+        }
         const replyBackendHandle = params.replyOperation
           ? {
               kind: "cli" as const,
@@ -431,6 +436,11 @@ export async function executePreparedCliRun(
             }
           : undefined;
         if (replyBackendHandle) {
+          if (process.env.OPENCLAW_CLI_STREAM_DEBUG === "1") {
+            console.error(
+              `[cli-stream-debug] attachBackend kind=cli isStreaming=${replyBackendHandle.isStreaming()}`,
+            );
+          }
           params.replyOperation?.attachBackend(replyBackendHandle);
         }
         const abortManagedRun = () => {
