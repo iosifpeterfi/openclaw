@@ -1234,6 +1234,22 @@ export function createCliJsonlStreamingParser(params: {
       });
     }
 
+    // Debug: log every parsed record type for stream visibility
+    const recordType = typeof parsed.type === "string" ? parsed.type : "unknown";
+    const eventType =
+      isRecord(parsed.event) && typeof parsed.event.type === "string"
+        ? parsed.event.type
+        : undefined;
+    const deltaType =
+      isRecord(parsed.event) && isRecord((parsed.event as Record<string, unknown>).delta)
+        ? ((parsed.event as Record<string, unknown>).delta as Record<string, unknown>).type
+        : undefined;
+    if (process.env.OPENCLAW_CLI_STREAM_DEBUG === "1") {
+      console.error(
+        `[cli-stream-debug] type=${recordType} event=${eventType ?? "-"} delta=${String(deltaType ?? "-")} textSoFar=${assistantText.length}`,
+      );
+    }
+
     const delta = parseClaudeCliStreamingDelta({
       backend: params.backend,
       providerId: params.providerId,
@@ -1275,6 +1291,11 @@ export function createCliJsonlStreamingParser(params: {
     if (classifyClaudeCommentary) {
       pendingClaudeText = `${pendingClaudeText}${delta.delta}`;
       return;
+    }
+    if (process.env.OPENCLAW_CLI_STREAM_DEBUG === "1") {
+      console.error(
+        `[cli-stream-debug] EMIT delta="${delta.delta.substring(0, 80)}" totalLen=${delta.text.length}`,
+      );
     }
     assistantText = delta.text;
     params.onAssistantDelta(delta);
