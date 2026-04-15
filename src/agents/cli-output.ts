@@ -354,26 +354,40 @@ function parseClaudeCliStreamingDelta(params: {
   if (!usesClaudeStreamJsonDialect(params)) {
     return null;
   }
-  if (params.parsed.type !== "stream_event" || !isRecord(params.parsed.event)) {
-    return null;
+
+  // Handle stream_event records
+  if (params.parsed.type === "stream_event" && isRecord(params.parsed.event)) {
+    const event = params.parsed.event;
+
+    // Text deltas — primary assistant output
+    if (event.type === "content_block_delta" && isRecord(event.delta)) {
+      const delta = event.delta;
+      if (delta.type === "text_delta" && typeof delta.text === "string" && delta.text) {
+        return {
+          text: `${params.textSoFar}${delta.text}`,
+          delta: delta.text,
+          sessionId: params.sessionId,
+          usage: params.usage,
+        };
+      }
+    }
+
+    // Tool use start — emit tool name so users see activity during tool-use turns
+    if (event.type === "content_block_start" && isRecord(event.content_block)) {
+      const block = event.content_block;
+      if (block.type === "tool_use" && typeof block.name === "string") {
+        const toolStatus = `\n🔧 ${block.name}\n`;
+        return {
+          text: `${params.textSoFar}${toolStatus}`,
+          delta: toolStatus,
+          sessionId: params.sessionId,
+          usage: params.usage,
+        };
+      }
+    }
   }
-  const event = params.parsed.event;
-  if (event.type !== "content_block_delta" || !isRecord(event.delta)) {
-    return null;
-  }
-  const delta = event.delta;
-  if (delta.type !== "text_delta" || typeof delta.text !== "string") {
-    return null;
-  }
-  if (!delta.text) {
-    return null;
-  }
-  return {
-    text: `${params.textSoFar}${delta.text}`,
-    delta: delta.text,
-    sessionId: params.sessionId,
-    usage: params.usage,
-  };
+
+  return null;
 }
 
 export function createCliJsonlStreamingParser(params: {
