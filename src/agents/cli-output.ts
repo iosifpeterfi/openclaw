@@ -372,6 +372,20 @@ function parseClaudeCliStreamingDelta(params: {
       }
     }
 
+    // Thinking deltas — show reasoning activity so users know the agent is working
+    if (event.type === "content_block_delta" && isRecord(event.delta)) {
+      const delta = event.delta;
+      if (delta.type === "thinking_delta" && typeof delta.thinking === "string" && delta.thinking) {
+        const thinkStatus = `💭 ${delta.thinking}`;
+        return {
+          text: `${params.textSoFar}${thinkStatus}`,
+          delta: thinkStatus,
+          sessionId: params.sessionId,
+          usage: params.usage,
+        };
+      }
+    }
+
     // Tool use start — emit tool name so users see activity during tool-use turns
     if (event.type === "content_block_start" && isRecord(event.content_block)) {
       const block = event.content_block;
