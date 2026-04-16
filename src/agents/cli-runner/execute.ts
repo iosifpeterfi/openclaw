@@ -349,20 +349,27 @@ export async function executePreparedCliRun(
             noOutputTimeoutMs,
             getProcessSupervisor: executeDeps.getProcessSupervisor,
             onAssistantDelta: ({ text, delta }) => {
+              const transformedText = applyPluginTextReplacements(
+                text,
+                context.backendResolved.textTransforms?.output,
+              );
+              const transformedDelta = applyPluginTextReplacements(
+                delta,
+                context.backendResolved.textTransforms?.output,
+              );
               emitAgentEvent({
                 runId: params.runId,
                 stream: "assistant",
-                data: {
-                  text: applyPluginTextReplacements(
-                    text,
-                    context.backendResolved.textTransforms?.output,
-                  ),
-                  delta: applyPluginTextReplacements(
-                    delta,
-                    context.backendResolved.textTransforms?.output,
-                  ),
-                },
+                data: { text: transformedText, delta: transformedDelta },
               });
+              if (params.onPartialReply && transformedText) {
+                void Promise.resolve(
+                  params.onPartialReply({
+                    text: transformedText,
+                    mediaUrls: [],
+                  }),
+                ).catch(() => {});
+              }
             },
             cleanup: claudeSkillsPlugin.cleanup,
           });
@@ -382,20 +389,27 @@ export async function executePreparedCliRun(
               backend,
               providerId: context.backendResolved.id,
               onAssistantDelta: ({ text, delta }) => {
+                const transformedText = applyPluginTextReplacements(
+                  text,
+                  context.backendResolved.textTransforms?.output,
+                );
+                const transformedDelta = applyPluginTextReplacements(
+                  delta,
+                  context.backendResolved.textTransforms?.output,
+                );
                 emitAgentEvent({
                   runId: params.runId,
                   stream: "assistant",
-                  data: {
-                    text: applyPluginTextReplacements(
-                      text,
-                      context.backendResolved.textTransforms?.output,
-                    ),
-                    delta: applyPluginTextReplacements(
-                      delta,
-                      context.backendResolved.textTransforms?.output,
-                    ),
-                  },
+                  data: { text: transformedText, delta: transformedDelta },
                 });
+                if (params.onPartialReply && transformedText) {
+                  void Promise.resolve(
+                    params.onPartialReply({
+                      text: transformedText,
+                      mediaUrls: [],
+                    }),
+                  ).catch(() => {});
+                }
               },
             })
           : null;

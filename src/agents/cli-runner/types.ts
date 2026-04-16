@@ -52,6 +52,7 @@ export type RunCliAgentParams = {
    * handles alive after returning.
    */
   cleanupCliLiveSessionOnRunEnd?: boolean;
+  onPartialReply?: (payload: { text: string; mediaUrls?: string[] }) => void | Promise<void>;
 };
 
 export type CliPreparedBackend = {
