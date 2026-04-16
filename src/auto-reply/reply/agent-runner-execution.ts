@@ -875,6 +875,16 @@ export async function runAgentTurnWithFallback(params: {
                   senderIsOwner: params.followupRun.run.senderIsOwner,
                   abortSignal: params.replyOperation?.abortSignal ?? params.opts?.abortSignal,
                   replyOperation: params.replyOperation,
+                  onPartialReply: async (payload) => {
+                    const textForTyping = await handlePartialForTyping(payload);
+                    if (!params.opts?.onPartialReply || textForTyping === undefined) {
+                      return;
+                    }
+                    await params.opts.onPartialReply({
+                      text: textForTyping,
+                      mediaUrls: payload.mediaUrls,
+                    });
+                  },
                 });
                 bootstrapPromptWarningSignaturesSeen = resolveBootstrapWarningSignaturesSeen(
                   result.meta?.systemPromptReport,

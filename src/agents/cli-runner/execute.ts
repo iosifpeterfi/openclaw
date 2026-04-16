@@ -317,20 +317,37 @@ export async function executePreparedCliRun(
                 backend,
                 providerId: context.backendResolved.id,
                 onAssistantDelta: ({ text, delta }) => {
+                  const transformedText = applyPluginTextReplacements(
+                    text,
+                    context.backendResolved.textTransforms?.output,
+                  );
+                  const transformedDelta = applyPluginTextReplacements(
+                    delta,
+                    context.backendResolved.textTransforms?.output,
+                  );
                   emitAgentEvent({
                     runId: params.runId,
                     stream: "assistant",
                     data: {
-                      text: applyPluginTextReplacements(
-                        text,
-                        context.backendResolved.textTransforms?.output,
-                      ),
-                      delta: applyPluginTextReplacements(
-                        delta,
-                        context.backendResolved.textTransforms?.output,
-                      ),
+                      text: transformedText,
+                      delta: transformedDelta,
                     },
                   });
+                  if (params.onPartialReply && transformedText) {
+                    if (process.env.OPENCLAW_CLI_STREAM_DEBUG === "1") {
+                      console.error(
+                        `[cli-stream-debug] onPartialReply FORWARD len=${transformedText.length} deltaLen=${transformedDelta.length}`,
+                      );
+                    }
+                    void Promise.resolve(
+                      params.onPartialReply({
+                        text: transformedText,
+                        mediaUrls: [],
+                      }),
+                    ).catch(() => {
+                      // swallow - reply pipeline errors shouldn't crash CLI runner
+                    });
+                  }
                 },
               })
             : null;
