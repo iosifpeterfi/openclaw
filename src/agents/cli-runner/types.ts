@@ -42,6 +42,7 @@ export type RunCliAgentParams = {
     text: string;
     mediaUrls?: string[];
   }) => void | Promise<void>;
+  onAssistantMessageStart?: () => void | Promise<void>;
 };
 
 export type CliPreparedBackend = {

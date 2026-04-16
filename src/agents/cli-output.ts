@@ -387,11 +387,13 @@ export function createCliJsonlStreamingParser(params: {
   backend: CliBackendConfig;
   providerId: string;
   onAssistantDelta: (delta: CliStreamingDelta) => void;
+  onAssistantMessageStart?: () => void | Promise<void>;
 }) {
   let lineBuffer = "";
   let assistantText = "";
   let sessionId: string | undefined;
   let usage: CliUsage | undefined;
+  let seenFirstAssistantRecord = false;
 
   const handleParsedRecord = (parsed: Record<string, unknown>) => {
     sessionId = pickCliSessionId(parsed, params.backend) ?? sessionId;
@@ -416,6 +418,27 @@ export function createCliJsonlStreamingParser(params: {
       console.error(
         `[cli-stream-debug] type=${recordType} event=${eventType ?? "-"} delta=${String(deltaType ?? "-")} textSoFar=${assistantText.length}`,
       );
+    }
+
+    // Assistant-turn boundary. Claude CLI emits a top-level `type: "assistant"`
+    // record once per completed turn (one API call between tool invocations).
+    // On every turn after the first, reset the text accumulator and notify the
+    // reply pipeline so Telegram rotates its draft message to a fresh message
+    // instead of editing the same draft with ever-growing cumulative text.
+    if (recordType === "assistant") {
+      if (seenFirstAssistantRecord) {
+        assistantText = "";
+        if (process.env.OPENCLAW_CLI_STREAM_DEBUG === "1") {
+          console.error(`[cli-stream-debug] assistant turn boundary → rotate message`);
+        }
+        if (params.onAssistantMessageStart) {
+          void Promise.resolve(params.onAssistantMessageStart()).catch(() => {
+            // swallow — reply pipeline errors shouldn't crash the CLI runner
+          });
+        }
+      } else {
+        seenFirstAssistantRecord = true;
+      }
     }
 
     const delta = parseClaudeCliStreamingDelta({

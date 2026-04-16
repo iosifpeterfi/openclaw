@@ -316,6 +316,7 @@ export async function executePreparedCliRun(
             ? createCliJsonlStreamingParser({
                 backend,
                 providerId: context.backendResolved.id,
+                onAssistantMessageStart: params.onAssistantMessageStart,
                 onAssistantDelta: ({ text, delta }) => {
                   const transformedText = applyPluginTextReplacements(
                     text,
