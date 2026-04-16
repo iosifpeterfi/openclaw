@@ -372,33 +372,12 @@ function parseClaudeCliStreamingDelta(params: {
       }
     }
 
-    // Thinking deltas — show reasoning activity so users know the agent is working
-    if (event.type === "content_block_delta" && isRecord(event.delta)) {
-      const delta = event.delta;
-      if (delta.type === "thinking_delta" && typeof delta.thinking === "string" && delta.thinking) {
-        const thinkStatus = `💭 ${delta.thinking}`;
-        return {
-          text: `${params.textSoFar}${thinkStatus}`,
-          delta: thinkStatus,
-          sessionId: params.sessionId,
-          usage: params.usage,
-        };
-      }
-    }
-
-    // Tool use start — emit tool name so users see activity during tool-use turns
-    if (event.type === "content_block_start" && isRecord(event.content_block)) {
-      const block = event.content_block;
-      if (block.type === "tool_use" && typeof block.name === "string") {
-        const toolStatus = `\n🔧 ${block.name}\n`;
-        return {
-          text: `${params.textSoFar}${toolStatus}`,
-          delta: toolStatus,
-          sessionId: params.sessionId,
-          usage: params.usage,
-        };
-      }
-    }
+    // Note: thinking_delta and tool_use events are intentionally NOT surfaced as
+    // streaming deltas to the reply pipeline. They create visual noise in channel
+    // deliveries (emojis, tool names) and — because many tiny chunks race to edit
+    // the same partial-reply message — produce duplicated-text artifacts. Only
+    // plain text_delta events become streaming output; thinking/tool activity is
+    // captured in the agent event bus for Control UI consumers.
   }
 
   return null;
