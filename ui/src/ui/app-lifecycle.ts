@@ -12,9 +12,17 @@ import {
   applySettingsFromUrl,
   detachThemeListener,
   inferBasePath,
+  setTheme,
+  setThemeMode,
   syncTabWithLocation,
   syncThemeWithSettings,
 } from "./app-settings.ts";
+import {
+  VALID_THEME_MODES,
+  VALID_THEME_NAMES,
+  type ThemeMode,
+  type ThemeName,
+} from "./theme.ts";
 import { loadControlUiBootstrapConfig } from "./controllers/control-ui-bootstrap.ts";
 import type { Tab } from "./navigation.ts";
 
@@ -42,6 +50,7 @@ type LifecycleHost = {
   logsEntries: unknown[];
   popStateHandler: () => void;
   topbarObserver: ResizeObserver | null;
+  embedThemeListener?: ((event: MessageEvent) => void) | null;
 };
 
 export function handleConnected(host: LifecycleHost) {
@@ -52,6 +61,21 @@ export function handleConnected(host: LifecycleHost) {
   syncTabWithLocation(host as unknown as Parameters<typeof syncTabWithLocation>[0], true);
   syncThemeWithSettings(host as unknown as Parameters<typeof syncThemeWithSettings>[0]);
   window.addEventListener("popstate", host.popStateHandler);
+
+  // Embedded mode: parent frame can request a theme switch via postMessage
+  // {type:"openclaw.control.theme", theme:"claw|knot|dash", mode:"light|dark|system"}.
+  // Used by the ClawBase dashboard to keep the iframe in dark mode.
+  host.embedThemeListener = (event: MessageEvent) => {
+    const data = event.data as { type?: string; theme?: string; mode?: string } | null;
+    if (!data || typeof data !== "object" || data.type !== "openclaw.control.theme") return;
+    if (data.theme && VALID_THEME_NAMES.has(data.theme as ThemeName)) {
+      setTheme(host as unknown as Parameters<typeof setTheme>[0], data.theme as ThemeName);
+    }
+    if (data.mode && VALID_THEME_MODES.has(data.mode as ThemeMode)) {
+      setThemeMode(host as unknown as Parameters<typeof setThemeMode>[0], data.mode as ThemeMode);
+    }
+  };
+  window.addEventListener("message", host.embedThemeListener);
   void bootstrapReady.finally(() => {
     if (host.connectGeneration !== connectGeneration) {
       return;
@@ -74,6 +98,10 @@ export function handleFirstUpdated(host: LifecycleHost) {
 export function handleDisconnected(host: LifecycleHost) {
   host.connectGeneration += 1;
   window.removeEventListener("popstate", host.popStateHandler);
+  if (host.embedThemeListener) {
+    window.removeEventListener("message", host.embedThemeListener);
+    host.embedThemeListener = null;
+  }
   stopNodesPolling(host as unknown as Parameters<typeof stopNodesPolling>[0]);
   stopLogsPolling(host as unknown as Parameters<typeof stopLogsPolling>[0]);
   stopDebugPolling(host as unknown as Parameters<typeof stopDebugPolling>[0]);
