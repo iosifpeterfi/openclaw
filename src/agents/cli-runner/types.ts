@@ -64,6 +64,7 @@ export type RunCliAgentParams = {
    * alive after the JSON response is emitted.
    */
   cleanupBundleMcpOnRunEnd?: boolean;
+  onPartialReply?: (payload: { text: string; mediaUrls?: string[] }) => void | Promise<void>;
 };
 
 export type CliPreparedBackend = {
