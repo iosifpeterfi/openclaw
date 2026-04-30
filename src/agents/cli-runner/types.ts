@@ -44,6 +44,7 @@ export type RunCliAgentParams = {
   senderIsOwner?: boolean;
   abortSignal?: AbortSignal;
   replyOperation?: ReplyOperation;
+  onPartialReply?: (payload: { text: string; mediaUrls?: string[] }) => void | Promise<void>;
 };
 
 export type CliPreparedBackend = {
