@@ -43,6 +43,10 @@ type CapabilityProviderPluginIdCacheEntry = {
   pluginIds: string[];
 };
 
+type CapabilityProvidersCacheEntry = {
+  providers: readonly unknown[];
+};
+
 const CAPABILITY_CONTRACT_KEY: Record<CapabilityProviderRegistryKey, CapabilityContractKey> = {
   memoryEmbeddingProviders: "memoryEmbeddingProviders",
   speechProviders: "speechProviders",
@@ -58,6 +62,50 @@ const capabilityProviderPluginIdCache = new WeakMap<
   OpenClawConfig,
   WeakMap<NodeJS.ProcessEnv, Map<string, CapabilityProviderPluginIdCacheEntry>>
 >();
+
+// clawbase: cache the full result of resolvePluginCapabilityProviders so a
+// repeat call with the same (cfg, env, key) skips the expensive
+// resolveRuntimePluginRegistry/loadOpenClawPlugins walk. Lifetime = lifetime
+// of the cfg object; replacing cfg invalidates naturally via the WeakMap.
+const capabilityProvidersCache = new WeakMap<
+  OpenClawConfig,
+  WeakMap<NodeJS.ProcessEnv, Map<CapabilityProviderRegistryKey, CapabilityProvidersCacheEntry>>
+>();
+
+function getCachedCapabilityProviders<K extends CapabilityProviderRegistryKey>(params: {
+  key: K;
+  cfg: OpenClawConfig;
+  env: NodeJS.ProcessEnv;
+}): CapabilityProviderForKey<K>[] | undefined {
+  const envCache = capabilityProvidersCache.get(params.cfg)?.get(params.env);
+  const cached = envCache?.get(params.key);
+  if (!cached) {
+    return undefined;
+  }
+  return [...(cached.providers as CapabilityProviderForKey<K>[])];
+}
+
+function memoizeCapabilityProviders<K extends CapabilityProviderRegistryKey>(params: {
+  key: K;
+  cfg: OpenClawConfig;
+  env: NodeJS.ProcessEnv;
+  providers: CapabilityProviderForKey<K>[];
+}): void {
+  let configCache = capabilityProvidersCache.get(params.cfg);
+  if (!configCache) {
+    configCache = new WeakMap<
+      NodeJS.ProcessEnv,
+      Map<CapabilityProviderRegistryKey, CapabilityProvidersCacheEntry>
+    >();
+    capabilityProvidersCache.set(params.cfg, configCache);
+  }
+  let envCache = configCache.get(params.env);
+  if (!envCache) {
+    envCache = new Map<CapabilityProviderRegistryKey, CapabilityProvidersCacheEntry>();
+    configCache.set(params.env, envCache);
+  }
+  envCache.set(params.key, { providers: [...params.providers] });
+}
 
 function buildCapabilityProviderPluginIdCacheKey(params: {
   key: CapabilityProviderRegistryKey;
@@ -355,11 +403,26 @@ export function resolvePluginCapabilityProviders<K extends CapabilityProviderReg
       return activeProviders.map((entry) => entry.provider) as CapabilityProviderForKey<K>[];
     }
   }
+  // clawbase: short-circuit the expensive runtime-registry rebuild when we've
+  // already resolved this capability for the same (cfg, env, key). Skipping
+  // straight to the cached providers avoids resolveRuntimePluginRegistry
+  // re-walking loadOpenClawPlugins per-capability on every turn.
+  if (params.cfg && !missingRequestedSpeechProviders) {
+    const cachedProviders = getCachedCapabilityProviders({
+      key: params.key,
+      cfg: params.cfg,
+      env: process.env,
+    });
+    if (cachedProviders) {
+      return cachedProviders;
+    }
+  }
   const compatConfig = resolveCapabilityProviderConfig({ key: params.key, cfg: params.cfg });
   const loadOptions =
     compatConfig === undefined ? undefined : { config: compatConfig, activate: false };
   const registry = resolveRuntimePluginRegistry(loadOptions);
   const loadedProviders = registry?.[params.key] ?? [];
+  let resolvedProviders: CapabilityProviderForKey<K>[];
   if (params.key !== "memoryEmbeddingProviders") {
     const mergeLoadedProviders =
       activeProviders.length > 0
@@ -369,7 +432,17 @@ export function resolvePluginCapabilityProviders<K extends CapabilityProviderReg
             entries: loadedProviders,
           })
         : loadedProviders;
-    return mergeCapabilityProviders(activeProviders, mergeLoadedProviders);
+    resolvedProviders = mergeCapabilityProviders(activeProviders, mergeLoadedProviders);
+  } else {
+    resolvedProviders = mergeCapabilityProviders(activeProviders, loadedProviders);
   }
-  return mergeCapabilityProviders(activeProviders, loadedProviders);
+  if (params.cfg && !missingRequestedSpeechProviders) {
+    memoizeCapabilityProviders({
+      key: params.key,
+      cfg: params.cfg,
+      env: process.env,
+      providers: resolvedProviders,
+    });
+  }
+  return resolvedProviders;
 }
