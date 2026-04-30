@@ -1320,6 +1320,10 @@ export async function runAgentTurnWithFallback(params: {
                       mediaUrls: payload.mediaUrls,
                     });
                   },
+                  onAssistantMessageStart: async () => {
+                    await params.typingSignals.signalMessageStart();
+                    await params.opts?.onAssistantMessageStart?.();
+                  },
                 });
                 bootstrapPromptWarningSignaturesSeen = resolveBootstrapWarningSignaturesSeen(
                   result.meta?.systemPromptReport,

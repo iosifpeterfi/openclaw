@@ -65,6 +65,7 @@ export type RunCliAgentParams = {
    */
   cleanupBundleMcpOnRunEnd?: boolean;
   onPartialReply?: (payload: { text: string; mediaUrls?: string[] }) => void | Promise<void>;
+  onAssistantMessageStart?: () => void | Promise<void>;
 };
 
 export type CliPreparedBackend = {
