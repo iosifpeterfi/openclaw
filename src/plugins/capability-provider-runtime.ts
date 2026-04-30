@@ -11,6 +11,7 @@ import {
 } from "./cache-controls.js";
 import { hasExplicitPluginConfig } from "./config-policy.js";
 import { resolveRuntimePluginRegistry } from "./loader.js";
+import { loadPluginManifestRegistry } from "./manifest-registry.js";
 import { loadPluginManifestRegistryForPluginRegistry } from "./plugin-registry.js";
 import type { PluginRegistry } from "./registry-types.js";
 
@@ -130,11 +131,21 @@ function resolveBundledCapabilityCompatPluginIds(params: {
     return cached;
   }
   const contractKey = CAPABILITY_CONTRACT_KEY[params.key];
-  const pluginIds = loadPluginManifestRegistryForPluginRegistry({
-    config: params.cfg,
-    env,
-    includeDisabled: true,
-  })
+  // Hot path (single filesystem walk) is the default; set
+  // OPENCLAW_COLD_PLUGIN_DISCOVERY=1 to fall back to the snapshot+index path
+  // introduced upstream in 2235a13d (slower but reuses installs.json).
+  const registry =
+    env.OPENCLAW_COLD_PLUGIN_DISCOVERY === "1"
+      ? loadPluginManifestRegistryForPluginRegistry({
+          config: params.cfg,
+          env,
+          includeDisabled: true,
+        })
+      : loadPluginManifestRegistry({
+          config: params.cfg,
+          env,
+        });
+  const pluginIds = registry
     .plugins.filter(
       (plugin) =>
         plugin.origin === "bundled" &&

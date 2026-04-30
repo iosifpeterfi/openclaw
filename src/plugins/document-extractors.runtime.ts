@@ -7,6 +7,7 @@ import {
 } from "./config-state.js";
 import { loadBundledDocumentExtractorEntriesFromDir } from "./document-extractor-public-artifacts.js";
 import type { PluginDocumentExtractorEntry } from "./document-extractor-types.js";
+import { loadPluginManifestRegistry } from "./manifest-registry.js";
 import type { PluginManifestRecord } from "./manifest-registry.js";
 import { loadPluginManifestRegistryForPluginRegistry } from "./plugin-registry.js";
 
@@ -44,11 +45,22 @@ function loadDocumentExtractorManifestRecords(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
 }): readonly PluginManifestRecord[] {
-  return loadPluginManifestRegistryForPluginRegistry({
+  const env = params.env ?? process.env;
+  // Hot path (single filesystem walk) is the default; set
+  // OPENCLAW_COLD_PLUGIN_DISCOVERY=1 to fall back to the snapshot+index path
+  // introduced upstream in 2235a13d (slower but reuses installs.json).
+  if (env.OPENCLAW_COLD_PLUGIN_DISCOVERY === "1") {
+    return loadPluginManifestRegistryForPluginRegistry({
+      config: params.config,
+      workspaceDir: params.workspaceDir,
+      env: params.env,
+      includeDisabled: true,
+    }).plugins;
+  }
+  return loadPluginManifestRegistry({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
-    includeDisabled: true,
   }).plugins;
 }
 

@@ -37,6 +37,10 @@ vi.mock("./loader.js", () => ({
   resolveRuntimePluginRegistry: mocks.resolveRuntimePluginRegistry,
 }));
 
+vi.mock("./manifest-registry.js", () => ({
+  loadPluginManifestRegistry: mocks.loadPluginManifestRegistry,
+}));
+
 vi.mock("./manifest-registry-installed.js", () => ({
   loadPluginManifestRegistryForInstalledIndex: mocks.loadPluginManifestRegistry,
 }));
