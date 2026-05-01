@@ -142,20 +142,23 @@ export function buildClaudeLiveArgs(params: {
   useResume: boolean;
 }): string[] {
   return appendArg(
-    upsertArgValue(
+    appendArg(
       upsertArgValue(
-        params.useResume
-          ? stripLiveProcessArgs(params.args, params.backend)
-          : appendSystemPromptArg(
-              stripLiveProcessArgs(params.args, params.backend),
-              params.backend,
-              params.systemPrompt,
-            ),
-        "--input-format",
-        "stream-json",
+        upsertArgValue(
+          params.useResume
+            ? stripLiveProcessArgs(params.args, params.backend)
+            : appendSystemPromptArg(
+                stripLiveProcessArgs(params.args, params.backend),
+                params.backend,
+                params.systemPrompt,
+              ),
+          "--input-format",
+          "stream-json",
+        ),
+        "--permission-prompt-tool",
+        "stdio",
       ),
-      "--permission-prompt-tool",
-      "stdio",
+      "--verbose",
     ),
     "--replay-user-messages",
   );
