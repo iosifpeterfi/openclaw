@@ -89,6 +89,7 @@ export function startChannelHealthMonitor(deps: ChannelHealthMonitorDeps): Chann
   let stopped = false;
   let checkInFlight = false;
   let timer: ReturnType<typeof setInterval> | null = null;
+  let earlyTimer: ReturnType<typeof setTimeout> | null = null;
 
   const rKey = (channelId: string, accountId: string) => `${channelId}:${accountId}`;
 
@@ -184,18 +185,33 @@ export function startChannelHealthMonitor(deps: ChannelHealthMonitorDeps): Chann
       clearInterval(timer);
       timer = null;
     }
+    if (earlyTimer) {
+      clearTimeout(earlyTimer);
+      earlyTimer = null;
+    }
   }
 
   if (abortSignal?.aborted) {
     stopped = true;
   } else {
     abortSignal?.addEventListener("abort", stop, { once: true });
+    // Fire one early check just past the startup grace window. Without
+    // this, a channel that never started at boot (e.g. plugin/harness
+    // race) waits ${checkIntervalMs}ms — 5 min on default settings —
+    // before the first interval-driven check picks it up. The early
+    // check is safe: channels that started successfully are still
+    // inside channel-connect-grace and will be evaluated as healthy.
+    const earlyCheckDelayMs = timing.monitorStartupGraceMs + 5_000;
+    earlyTimer = setTimeout(() => void runCheck(), earlyCheckDelayMs);
+    if (typeof earlyTimer === "object" && "unref" in earlyTimer) {
+      earlyTimer.unref();
+    }
     timer = setInterval(() => void runCheck(), checkIntervalMs);
     if (typeof timer === "object" && "unref" in timer) {
       timer.unref();
     }
     log.info?.(
-      `started (interval: ${Math.round(checkIntervalMs / 1000)}s, startup-grace: ${Math.round(timing.monitorStartupGraceMs / 1000)}s, channel-connect-grace: ${Math.round(timing.channelConnectGraceMs / 1000)}s)`,
+      `started (interval: ${Math.round(checkIntervalMs / 1000)}s, startup-grace: ${Math.round(timing.monitorStartupGraceMs / 1000)}s, channel-connect-grace: ${Math.round(timing.channelConnectGraceMs / 1000)}s, early-check: ${Math.round(earlyCheckDelayMs / 1000)}s)`,
     );
   }
 
