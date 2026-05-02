@@ -1,0 +1,15 @@
+{
+  "id": "openclaw-cron-skill",
+  "activation": {
+    "onStartup": false
+  },
+  "enabledByDefault": true,
+  "name": "OpenClaw Cron Skill",
+  "description": "Ships the openclaw-cron skill that teaches claude to use mcp__openclaw__cron for recurring tasks instead of the in-session Schedule tool.",
+  "skills": ["./skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
