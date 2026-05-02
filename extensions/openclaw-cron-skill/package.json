@@ -1,8 +1,8 @@
 {
-  "name": "@openclaw/claude-cli-catalog",
+  "name": "@openclaw/openclaw-cron-skill",
   "version": "2026.4.29",
   "private": true,
-  "description": "Registers claude-cli/{opus,sonnet,haiku} model entries so cron + sub-agent dispatch resolves to the existing claude-cli runner",
+  "description": "Ships the openclaw-cron skill that teaches claude to use mcp__openclaw__cron for recurring tasks instead of the in-session Schedule tool",
   "type": "module",
   "devDependencies": {
     "@openclaw/plugin-sdk": "workspace:*"
