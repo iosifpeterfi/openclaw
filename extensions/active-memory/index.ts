@@ -2126,10 +2126,21 @@ async function runRecallSubagent(params: {
     // (OAuth) instead of PI's direct Anthropic API. Falls through to PI when
     // the CLI runner isn't registered, preserving upstream behavior.
     const useCliRunner = isCliProvider("claude-cli", embeddedConfig);
+    // Warm-slot identifiers (stable per agent). cli-runner's live-session
+    // machinery keys processes by (sessionId, sessionKey), so these stable
+    // values let consecutive recall calls reuse a pre-spawned haiku. The
+    // post-recall setImmediate below pre-warms the next slot during opus's
+    // reply window, so the user pays no cold-start on the next recall.
+    const warmSessionId = useCliRunner
+      ? `active-memory-warm-${params.agentId}`
+      : subagentSessionId;
+    const warmSessionKey = useCliRunner
+      ? `agent:${params.agentId}:active-memory-warm`
+      : subagentSessionKey;
     const result = useCliRunner
       ? await params.api.runtime.agent.runCliAgent({
-          sessionId: subagentSessionId,
-          sessionKey: subagentSessionKey,
+          sessionId: warmSessionId,
+          sessionKey: warmSessionKey,
           agentId: params.agentId,
           messageChannel,
           sessionFile,
@@ -2143,7 +2154,7 @@ async function runRecallSubagent(params: {
           // for catalog-resolution reasons).
           model: "haiku",
           timeoutMs: params.config.timeoutMs,
-          runId: subagentSessionId,
+          runId: warmSessionId,
           trigger: "manual",
           // The cli-runner respects toolsAllow and the memory recall path only
           // needs the three memory tools below.
@@ -2151,6 +2162,11 @@ async function runRecallSubagent(params: {
           // verboseLevel, reasoningLevel, silentExpected, authProfileFailurePolicy)
           // are not part of RunCliAgentParams and are dropped on this branch.
           thinkLevel: params.config.thinking,
+          // Consume-and-replace warm slot:
+          // - cleanupCliLiveSessionOnRunEnd: true → kill THIS process now (consume)
+          // - the setImmediate below spawns a replacement at the same key so
+          //   the NEXT recall reuses the warm process. Net effect: every
+          //   recall after the first is warm-start, ~0.5s instead of ~3s.
           cleanupBundleMcpOnRunEnd: true,
           cleanupCliLiveSessionOnRunEnd: true,
           abortSignal: params.abortSignal,
@@ -2193,6 +2209,42 @@ async function runRecallSubagent(params: {
           : new Error("Operation aborted");
       abortErr.name = "AbortError";
       throw abortErr;
+    }
+    // Background pre-warm: spawn a fresh haiku at the warm-slot key so the
+    // NEXT recall reuses it warm instead of paying ~3s spawn cost. This runs
+    // during opus's reply window (5-30s typical), invisible to the user.
+    // Uses a trivial "ready" prompt to force the live session to spawn and
+    // sets cleanupCliLiveSessionOnRunEnd: false so the process stays alive
+    // afterward. Best-effort: any failure is logged and the next recall will
+    // just pay the cold-start cost as a fallback.
+    if (useCliRunner) {
+      const embeddedConfigForWarmup = embeddedConfig;
+      setImmediate(() => {
+        params.api.runtime.agent
+          .runCliAgent({
+            sessionId: warmSessionId,
+            sessionKey: warmSessionKey,
+            agentId: params.agentId,
+            messageChannel,
+            sessionFile,
+            workspaceDir,
+            config: embeddedConfigForWarmup,
+            prompt: "Reply with the single literal word 'ready'. Do not call tools.",
+            provider: "claude-cli",
+            model: "haiku",
+            timeoutMs: 30_000,
+            runId: `${warmSessionId}-prewarm`,
+            trigger: "manual",
+            thinkLevel: "off",
+            cleanupBundleMcpOnRunEnd: false,
+            cleanupCliLiveSessionOnRunEnd: false,
+          })
+          .catch(() => {
+            // Pre-warm failures are non-fatal; the next recall just pays the
+            // cold-start. No need to log noisily — the recall path itself
+            // will report any failures of its own.
+          });
+      });
     }
     const rawReply = (result.payloads ?? [])
       .map((payload) => payload.text?.trim() ?? "")
