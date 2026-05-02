@@ -866,7 +866,13 @@ export async function runClaudeLiveSessionTurn(params: {
     await params.cleanup();
   };
   let session = liveSessions.get(key) ?? null;
-  if (session && resumeCapable && !params.useResume) {
+  // clawbase patch: when params.context.params.allowFreshTurnReuse is true,
+  // keep the existing live session even though useResume is false. Lets the
+  // active-memory plugin's consume-and-replace warm-slot pattern actually
+  // reuse a pre-spawned haiku for fresh-turn calls. Default behavior (close
+  // and respawn) is preserved for all upstream callers.
+  const allowFreshTurnReuse = params.context.params.allowFreshTurnReuse === true;
+  if (session && resumeCapable && !params.useResume && !allowFreshTurnReuse) {
     closeLiveSession(session, "restart");
     session = null;
   }
@@ -893,7 +899,10 @@ export async function runClaudeLiveSessionTurn(params: {
       if (session.fingerprint !== fingerprint) {
         closeLiveSession(session, "restart");
         session = null;
-      } else if (resumeCapable && !params.useResume) {
+      } else if (resumeCapable && !params.useResume && !allowFreshTurnReuse) {
+        // clawbase patch: same allowFreshTurnReuse override as the earlier
+        // close at line 822 — let the warm pendingSession survive a non-resume
+        // recall when the active-memory consume-and-replace pattern asks for it.
         closeLiveSession(session, "restart");
         session = null;
       } else {

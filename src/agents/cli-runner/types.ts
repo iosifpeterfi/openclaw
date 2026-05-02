@@ -61,6 +61,25 @@ export type RunCliAgentParams = {
    */
   cleanupCliLiveSessionOnRunEnd?: boolean;
   /**
+   * Allow reusing a warm claude live session even when `useResume` is false.
+   *
+   * Default behavior: when `useResume === false` and a live session exists at
+   * the same (sessionId, sessionKey) key, claude-live-session.ts closes it and
+   * spawns fresh — the cli-runner assumes a non-resume call wants a clean
+   * process. That blocks consume-and-replace warm-slot patterns where one
+   * caller pre-spawns a haiku at a stable key (cleanupCliLiveSessionOnRunEnd:
+   * false) and a subsequent caller wants to reuse that warm process for a
+   * fresh turn (useResume: false).
+   *
+   * Setting this flag to true skips that close: the warm session is reused for
+   * the new turn. Conversation history within the warm process accumulates
+   * across calls — only set this when you control both the warm-up and the
+   * consumer, and you understand the context-bleed implications.
+   *
+   * Used by the active-memory plugin's recall sub-agent path.
+   */
+  allowFreshTurnReuse?: boolean;
+  /**
    * Close process-wide bundle MCP resources after this run. Intended for
    * one-shot local CLI calls where the loopback server should not keep Node
    * alive after the JSON response is emitted.
