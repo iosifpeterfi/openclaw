@@ -2163,10 +2163,15 @@ async function runRecallSubagent(params: {
           // are not part of RunCliAgentParams and are dropped on this branch.
           thinkLevel: params.config.thinking,
           // Consume-and-replace warm slot:
-          // - cleanupCliLiveSessionOnRunEnd: true → kill THIS process now (consume)
+          // - allowFreshTurnReuse: true → bypass cli-runner's "non-resume call
+          //   means kill the warm session" assumption. With this, the recall
+          //   reuses the haiku pre-spawned by the previous turn's setImmediate.
+          // - cleanupCliLiveSessionOnRunEnd: true → kill THIS process now
+          //   (consume) so it doesn't accumulate context for future recalls.
           // - the setImmediate below spawns a replacement at the same key so
-          //   the NEXT recall reuses the warm process. Net effect: every
-          //   recall after the first is warm-start, ~0.5s instead of ~3s.
+          //   the NEXT recall reuses the freshly-warmed process. Net effect:
+          //   every recall after the first is warm-start, ~2s instead of ~20s.
+          allowFreshTurnReuse: true,
           cleanupBundleMcpOnRunEnd: true,
           cleanupCliLiveSessionOnRunEnd: true,
           abortSignal: params.abortSignal,
@@ -2236,6 +2241,10 @@ async function runRecallSubagent(params: {
             runId: `${warmSessionId}-prewarm`,
             trigger: "manual",
             thinkLevel: "off",
+            // Same allowFreshTurnReuse contract as the recall — both sides of
+            // the warm-slot dance need to opt in or cli-runner's default close
+            // behavior kicks in on either call.
+            allowFreshTurnReuse: true,
             cleanupBundleMcpOnRunEnd: false,
             cleanupCliLiveSessionOnRunEnd: false,
           })
