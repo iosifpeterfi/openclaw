@@ -6,6 +6,7 @@
   "enabledByDefault": true,
   "name": "Claude CLI Catalog",
   "description": "Registers claude-cli/{opus,sonnet,haiku} model entries so cron + sub-agent dispatch resolves to the existing claude-cli runner.",
+  "providers": ["claude-cli"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
