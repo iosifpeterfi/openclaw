@@ -2171,11 +2171,17 @@ async function runRecallSubagent(params: {
           //   reuses the haiku pre-spawned by the previous turn's setImmediate.
           // - cleanupCliLiveSessionOnRunEnd: true → kill THIS process now
           //   (consume) so it doesn't accumulate context for future recalls.
+          // - cleanupBundleMcpOnRunEnd MUST be false. That flag closes the
+          //   shared gateway MCP loopback (closeMcpLoopbackServer()), which
+          //   regenerates auth tokens. The parent claude session would then
+          //   have stale tokens in its env and get 401s — surfacing as the
+          //   bot reporting "openclaw MCP disconnected" mid-conversation.
+          //   The loopback is gateway-lifetime, not per-run.
           // - the setImmediate below spawns a replacement at the same key so
           //   the NEXT recall reuses the freshly-warmed process. Net effect:
           //   every recall after the first is warm-start, ~2s instead of ~20s.
           allowFreshTurnReuse: true,
-          cleanupBundleMcpOnRunEnd: true,
+          cleanupBundleMcpOnRunEnd: false,
           cleanupCliLiveSessionOnRunEnd: true,
           abortSignal: params.abortSignal,
         })
