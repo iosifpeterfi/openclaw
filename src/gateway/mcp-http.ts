@@ -51,8 +51,20 @@ type McpLoopbackServer = {
   close: () => Promise<void>;
 };
 
-let activeMcpLoopbackServer: McpLoopbackServer | undefined;
-let activeMcpLoopbackServerPromise: Promise<McpLoopbackServer> | null = null;
+// clawbase patch: store the active loopback server on globalThis so
+// duplicate-module-instance scenarios (the bundler splits mcp-http.ts into
+// several chunks; sync vs lazy imports load different module instances)
+// share the same state. Without this, the second module instance sees the
+// state as null and tries to re-bind the loopback port, which fails with
+// EADDRINUSE when the env-pinned OPENCLAW_MCP_LOOPBACK_PORT is in use.
+const STATE_KEY = Symbol.for("openclaw.mcp.loopback.state");
+type LoopbackState = {
+  server: McpLoopbackServer | undefined;
+  promise: Promise<McpLoopbackServer> | null;
+};
+const loopbackState: LoopbackState =
+  ((globalThis as unknown as Record<symbol, LoopbackState>)[STATE_KEY] ??=
+    { server: undefined, promise: null });
 
 function createMcpJsonParseError(error: unknown): Error & { code: "mcp_json_parse_error" } {
   return Object.assign(new Error("MCP JSON parse error"), {
@@ -381,8 +393,8 @@ export async function startMcpLoopbackServer(port = 0): Promise<{
         httpServer.close((error) => {
           if (!error) {
             clearActiveMcpLoopbackRuntimeByOwnerToken(ownerToken);
-            if (activeMcpLoopbackServer === server) {
-              activeMcpLoopbackServer = undefined;
+            if (loopbackState.server === server) {
+              loopbackState.server = undefined;
             }
           }
           if (error) {
@@ -399,8 +411,8 @@ export async function startMcpLoopbackServer(port = 0): Promise<{
 
 /** Returns the active MCP loopback server or starts one if none exists. */
 export async function ensureMcpLoopbackServer(port = 0): Promise<McpLoopbackServer> {
-  if (activeMcpLoopbackServer) {
-    return activeMcpLoopbackServer;
+  if (loopbackState.server) {
+    return loopbackState.server;
   }
   // clawbase patch: when no explicit port is given, honor the
   // OPENCLAW_MCP_LOOPBACK_PORT env var. Lets deployments pin a stable port
@@ -414,27 +426,27 @@ export async function ensureMcpLoopbackServer(port = 0): Promise<McpLoopbackServ
       effectivePort = envPort;
     }
   }
-  if (!activeMcpLoopbackServerPromise) {
-    activeMcpLoopbackServerPromise = startMcpLoopbackServer(effectivePort)
+  if (!loopbackState.promise) {
+    loopbackState.promise = startMcpLoopbackServer(effectivePort)
       .then((server) => {
-        activeMcpLoopbackServer = server;
+        loopbackState.server = server;
         return server;
       })
       .finally(() => {
-        activeMcpLoopbackServerPromise = null;
+        loopbackState.promise = null;
       });
   }
-  return activeMcpLoopbackServerPromise;
+  return loopbackState.promise;
 }
 
 /** Closes the active MCP loopback server if one has been started. */
 export async function closeMcpLoopbackServer(): Promise<void> {
   const server =
-    activeMcpLoopbackServer ??
-    (activeMcpLoopbackServerPromise ? await activeMcpLoopbackServerPromise : undefined);
+    loopbackState.server ??
+    (loopbackState.promise ? await loopbackState.promise : undefined);
   if (!server) {
     return;
   }
-  activeMcpLoopbackServer = undefined;
+  loopbackState.server = undefined;
   await server.close();
 }
