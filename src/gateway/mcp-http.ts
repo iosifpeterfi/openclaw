@@ -402,8 +402,20 @@ export async function ensureMcpLoopbackServer(port = 0): Promise<McpLoopbackServ
   if (activeMcpLoopbackServer) {
     return activeMcpLoopbackServer;
   }
+  // clawbase patch: when no explicit port is given, honor the
+  // OPENCLAW_MCP_LOOPBACK_PORT env var. Lets deployments pin a stable port
+  // so claude's --mcp-config (written at spawn time) keeps pointing at a
+  // valid endpoint across gateway internal MCP loopback reloads (which
+  // otherwise rotate the random port and strand the claude session).
+  let effectivePort = port;
+  if (!effectivePort) {
+    const envPort = Number.parseInt(process.env.OPENCLAW_MCP_LOOPBACK_PORT ?? "", 10);
+    if (Number.isFinite(envPort) && envPort > 0 && envPort < 65536) {
+      effectivePort = envPort;
+    }
+  }
   if (!activeMcpLoopbackServerPromise) {
-    activeMcpLoopbackServerPromise = startMcpLoopbackServer(port)
+    activeMcpLoopbackServerPromise = startMcpLoopbackServer(effectivePort)
       .then((server) => {
         activeMcpLoopbackServer = server;
         return server;
