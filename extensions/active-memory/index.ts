@@ -5,6 +5,7 @@ import path from "node:path";
 import * as readline from "node:readline";
 import {
   DEFAULT_PROVIDER,
+  isCliProvider,
   parseModelRef,
   resolveAgentDir,
   resolveAgentEffectiveModelPrimary,
@@ -2120,33 +2121,67 @@ async function runRecallSubagent(params: {
 
   try {
     const embeddedConfig = applyActiveMemoryRuntimeConfigSnapshot(params.api.config, params.config);
-    const result = await params.api.runtime.agent.runEmbeddedPiAgent({
-      sessionId: subagentSessionId,
-      sessionKey: subagentSessionKey,
-      agentId: params.agentId,
-      messageChannel,
-      messageProvider,
-      sessionFile,
-      workspaceDir,
-      agentDir,
-      config: embeddedConfig,
-      prompt,
-      provider: modelRef.provider,
-      model: modelRef.model,
-      timeoutMs: params.config.timeoutMs,
-      runId: subagentSessionId,
-      trigger: "manual",
-      toolsAllow: ["memory_recall", "memory_search", "memory_get"],
-      disableMessageTool: true,
-      bootstrapContextMode: "lightweight",
-      verboseLevel: "off",
-      thinkLevel: params.config.thinking,
-      reasoningLevel: "off",
-      silentExpected: true,
-      authProfileFailurePolicy: "local",
-      cleanupBundleMcpOnRunEnd: true,
-      abortSignal: params.abortSignal,
-    });
+    // clawbase patch: when claude-cli is available as a CLI runner on this
+    // gateway, prefer it for memory recall sub-agent runs. Subscription path
+    // (OAuth) instead of PI's direct Anthropic API. Falls through to PI when
+    // the CLI runner isn't registered, preserving upstream behavior.
+    const useCliRunner = isCliProvider("claude-cli", embeddedConfig);
+    const result = useCliRunner
+      ? await params.api.runtime.agent.runCliAgent({
+          sessionId: subagentSessionId,
+          sessionKey: subagentSessionKey,
+          agentId: params.agentId,
+          messageChannel,
+          sessionFile,
+          workspaceDir,
+          config: embeddedConfig,
+          prompt,
+          provider: "claude-cli",
+          // Memory recall is a small classifier task — haiku is plenty and the
+          // recall budget shouldn't burn opus tokens. Hardcoded so it works
+          // regardless of the agent's primary model (which may be anthropic/*
+          // for catalog-resolution reasons).
+          model: "haiku",
+          timeoutMs: params.config.timeoutMs,
+          runId: subagentSessionId,
+          trigger: "manual",
+          // The cli-runner respects toolsAllow and the memory recall path only
+          // needs the three memory tools below.
+          // Note: PI-only options (bootstrapContextMode, disableMessageTool,
+          // verboseLevel, reasoningLevel, silentExpected, authProfileFailurePolicy)
+          // are not part of RunCliAgentParams and are dropped on this branch.
+          thinkLevel: params.config.thinking,
+          cleanupBundleMcpOnRunEnd: true,
+          cleanupCliLiveSessionOnRunEnd: true,
+          abortSignal: params.abortSignal,
+        })
+      : await params.api.runtime.agent.runEmbeddedPiAgent({
+          sessionId: subagentSessionId,
+          sessionKey: subagentSessionKey,
+          agentId: params.agentId,
+          messageChannel,
+          messageProvider,
+          sessionFile,
+          workspaceDir,
+          agentDir,
+          config: embeddedConfig,
+          prompt,
+          provider: modelRef.provider,
+          model: modelRef.model,
+          timeoutMs: params.config.timeoutMs,
+          runId: subagentSessionId,
+          trigger: "manual",
+          toolsAllow: ["memory_recall", "memory_search", "memory_get"],
+          disableMessageTool: true,
+          bootstrapContextMode: "lightweight",
+          verboseLevel: "off",
+          thinkLevel: params.config.thinking,
+          reasoningLevel: "off",
+          silentExpected: true,
+          authProfileFailurePolicy: "local",
+          cleanupBundleMcpOnRunEnd: true,
+          abortSignal: params.abortSignal,
+        });
     if (params.abortSignal?.aborted) {
       const reason = params.abortSignal.reason;
       if (reason instanceof Error) {
