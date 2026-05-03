@@ -149,8 +149,8 @@ export type PluginRuntimeCore = {
     resolveThinkingPolicy: (
       params: PluginRuntimeThinkingPolicyRequest,
     ) => PluginRuntimeThinkingPolicy;
-    runEmbeddedAgent: import("../../agents/pi-embedded-runtime.types.js").RunEmbeddedAgentFn;
-    runEmbeddedPiAgent: import("../../agents/pi-embedded-runtime.types.js").RunEmbeddedPiAgentFn;
+    runEmbeddedAgent: RuntimeRunEmbeddedPiAgent;
+    runEmbeddedPiAgent: RuntimeRunEmbeddedPiAgent;
     runCliAgent: typeof import("../../agents/cli-runner.js").runCliAgent;
     resolveAgentTimeoutMs: typeof import("../../agents/timeout.js").resolveAgentTimeoutMs;
     ensureAgentWorkspace: typeof import("../../agents/workspace.js").ensureAgentWorkspace;
