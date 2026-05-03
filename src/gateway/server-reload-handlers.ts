@@ -287,6 +287,16 @@ export function createGatewayReloadHandlers(params: GatewayReloadHandlerParams) 
       });
     }
 
+    if (plan.clearChannelCatalogCache) {
+      // plugins.* config edits (entries.<id>.enabled, allow, deny, slots)
+      // historically forced a full gateway restart. The channel-catalog
+      // cache is the single in-memory dependency on those values, and
+      // clearing it lets the next listChannelCatalogEntries call rebuild
+      // with the new config — without dropping any sessions or MCP state.
+      const { clearChannelCatalogCache } = await import("../plugins/channel-catalog-registry.js");
+      clearChannelCatalogCache();
+    }
+
     if (plan.restartGmailWatcher) {
       const [{ stopGmailWatcher }, { startGmailWatcherWithLogs }] = await Promise.all([
         import("../hooks/gmail-watcher.js"),

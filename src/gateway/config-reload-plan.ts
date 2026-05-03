@@ -20,6 +20,7 @@ export type GatewayReloadPlan = {
   restartHealthMonitor: boolean;
   restartChannels: Set<ChannelKind>;
   disposeMcpRuntimes: boolean;
+  clearChannelCatalogCache: boolean;
   noopPaths: string[];
 };
 
@@ -36,6 +37,7 @@ type ReloadAction =
   | "restart-heartbeat"
   | "restart-health-monitor"
   | "dispose-mcp-runtimes"
+  | "clear-channel-catalog-cache"
   | `restart-channel:${ChannelId}`;
 
 export type GatewayReloadPlanOptions = {
@@ -97,6 +99,17 @@ const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: "agent.heartbeat", kind: "hot", actions: ["restart-heartbeat"] },
   { prefix: "cron", kind: "hot", actions: ["restart-cron"] },
   { prefix: "mcp", kind: "hot", actions: ["dispose-mcp-runtimes"] },
+  // plugins.entries.<id>.enabled flips, plugins.allow/deny edits, and
+  // plugins.slots changes used to fall through to BASE_RELOAD_RULES_TAIL's
+  // "plugins" → restart rule, forcing a full ~25s gateway restart for
+  // every plugin enable/disable. Clearing the channel-catalog cache is
+  // sufficient: the next listChannelCatalogEntries call rebuilds with
+  // current config. resolveConfiguredCommandOwners-style runtime reads
+  // pick up the new config snapshot via the existing chokidar watcher.
+  { prefix: "plugins.entries", kind: "hot", actions: ["clear-channel-catalog-cache"] },
+  { prefix: "plugins.allow", kind: "hot", actions: ["clear-channel-catalog-cache"] },
+  { prefix: "plugins.deny", kind: "hot", actions: ["clear-channel-catalog-cache"] },
+  { prefix: "plugins.slots", kind: "hot", actions: ["clear-channel-catalog-cache"] },
   // commands.* (e.g. ownerAllowFrom, useAccessGroups) is read fresh from
   // the runtime config snapshot on each command-auth check; no subsystem
   // restart is needed when it changes. Without this rule, the default
@@ -296,6 +309,7 @@ export function buildGatewayReloadPlan(
     restartHealthMonitor: false,
     restartChannels: new Set(),
     disposeMcpRuntimes: false,
+    clearChannelCatalogCache: false,
     noopPaths: [],
   };
 
@@ -323,6 +337,9 @@ export function buildGatewayReloadPlan(
         break;
       case "dispose-mcp-runtimes":
         plan.disposeMcpRuntimes = true;
+        break;
+      case "clear-channel-catalog-cache":
+        plan.clearChannelCatalogCache = true;
         break;
       default:
         break;
