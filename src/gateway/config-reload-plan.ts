@@ -118,6 +118,14 @@ const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: "agent.heartbeat", kind: "hot", actions: ["restart-heartbeat"] },
   { prefix: "cron", kind: "hot", actions: ["restart-cron"] },
   { prefix: "mcp", kind: "hot", actions: ["dispose-mcp-runtimes"] },
+  // commands.* (e.g. ownerAllowFrom, useAccessGroups) is read fresh from
+  // the runtime config snapshot on each command-auth check; no subsystem
+  // restart is needed when it changes. Without this rule, the default
+  // fallthrough at line 333 would force a full gateway restart on every
+  // pair-flow update to ownerAllowFrom — adding 2-3s of UX delay during
+  // device pairing. Hot-reload is sufficient: cron, command-auth, and
+  // direct-dm-access pick up the new owner list lazily on next use.
+  { prefix: "commands", kind: "hot" },
   { prefix: "plugins.load", kind: "restart" },
   { prefix: "plugins.installs", kind: "restart" },
 ];
