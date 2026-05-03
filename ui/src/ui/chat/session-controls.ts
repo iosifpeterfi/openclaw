@@ -85,36 +85,32 @@ async function refreshVisibleToolsEffectiveForCurrentSessionLazy(state: AppViewS
 }
 
 function renderChatModelSelect(state: AppViewState) {
-  const { currentOverride, defaultLabel, options } = resolveChatModelSelectState(state);
+  const { defaultModel, defaultDisplay } = resolveChatModelSelectState(state);
   const busy =
     state.chatLoading || state.chatSending || Boolean(state.chatRunId) || state.chatStream !== null;
-  const disabled =
-    !state.connected || busy || (state.chatModelsLoading && options.length === 0) || !state.client;
-  const selectedLabel =
-    currentOverride === ""
-      ? defaultLabel
-      : (options.find((entry) => entry.value === currentOverride)?.label ?? currentOverride);
+  const disabled = !state.connected || busy || !state.client;
+  // ClawBase customisation: always collapse the dropdown to a single
+  // option representing the running configured model. Label it
+  // "ClawBase Premium" only when served by claude-cli (managed plan);
+  // otherwise show the configured model's display name. Submitting the
+  // empty value tells the gateway to use agents.defaults.model.primary.
+  // resolveChatModelSelectState stays intact so its unit tests pass.
+  const label = defaultModel.startsWith("claude-cli/")
+    ? "ClawBase Premium"
+    : defaultDisplay || "Default model";
   return html`
     <label class="field chat-controls__session chat-controls__model">
       <select
         data-chat-model-select="true"
         aria-label="Chat model"
-        title=${selectedLabel}
+        title=${label}
         ?disabled=${disabled}
         @change=${async (e: Event) => {
           const next = (e.target as HTMLSelectElement).value.trim();
           await switchChatModel(state, next);
         }}
       >
-        <option value="" ?selected=${currentOverride === ""}>${defaultLabel}</option>
-        ${repeat(
-          options,
-          (entry) => entry.value,
-          (entry) =>
-            html`<option value=${entry.value} ?selected=${entry.value === currentOverride}>
-              ${entry.label}
-            </option>`,
-        )}
+        <option value="" selected>${label}</option>
       </select>
     </label>
   `;
