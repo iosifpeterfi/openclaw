@@ -2134,9 +2134,7 @@ async function runRecallSubagent(params: {
     // values let consecutive recall calls reuse a pre-spawned haiku. The
     // post-recall setImmediate below pre-warms the next slot during opus's
     // reply window, so the user pays no cold-start on the next recall.
-    const warmSessionId = useCliRunner
-      ? `active-memory-warm-${params.agentId}`
-      : subagentSessionId;
+    const warmSessionId = useCliRunner ? `active-memory-warm-${params.agentId}` : subagentSessionId;
     const warmSessionKey = useCliRunner
       ? `agent:${params.agentId}:active-memory-warm`
       : subagentSessionKey;
@@ -2203,6 +2201,7 @@ async function runRecallSubagent(params: {
           trigger: "manual",
           toolsAllow: ["memory_recall", "memory_search", "memory_get"],
           disableMessageTool: true,
+          allowGatewaySubagentBinding: true,
           bootstrapContextMode: "lightweight",
           verboseLevel: "off",
           thinkLevel: params.config.thinking,
