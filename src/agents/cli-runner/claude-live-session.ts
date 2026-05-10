@@ -24,6 +24,7 @@ type ClaudeLiveTurn = {
   rawLines: string[];
   rawChars: number;
   sessionId?: string;
+  userInput?: string;
   noOutputTimer: NodeJS.Timeout | null;
   timeoutTimer: NodeJS.Timeout | null;
   streamingParser: ReturnType<typeof createCliJsonlStreamingParser>;
@@ -325,6 +326,49 @@ function finishTurn(session: ClaudeLiveSession, output: CliOutput): void {
   session.currentTurn = null;
   turn.resolve(output);
   scheduleIdleClose(session);
+  // CE afterTurn: ingest user+assistant messages into the context engine
+  // (e.g. graphiti knowledge graph) after each CLI turn.
+  void finalizeCliContextEngineTurn(session, turn, output);
+}
+
+async function finalizeCliContextEngineTurn(
+  session: ClaudeLiveSession,
+  turn: ClaudeLiveTurn,
+  output: CliOutput,
+): Promise<void> {
+  try {
+    const { resolveContextEngine } = await import("../../context-engine/registry.js");
+    const fs = await import("node:fs");
+    const configPath = `${process.env.HOME || "/home/node"}/.openclaw/openclaw.json`;
+    let cfg: Record<string, unknown> = {};
+    try {
+      cfg = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    } catch {
+      // no config available
+    }
+    const ce = await resolveContextEngine(cfg);
+    if (ce && typeof ce.afterTurn === "function") {
+      const msgs: Array<{ role: string; content: string }> = [];
+      if (turn.userInput) {
+        msgs.push({ role: "user", content: turn.userInput });
+      }
+      const text = (output as Record<string, unknown>).text ?? (output as Record<string, unknown>).content ?? "";
+      if (text) {
+        msgs.push({ role: "assistant", content: typeof text === "string" ? text : JSON.stringify(text) });
+      }
+      if (msgs.length > 0) {
+        await ce.afterTurn({
+          sessionId: session.key,
+          sessionKey: session.key,
+          messages: msgs,
+          prePromptMessageCount: 0,
+        });
+        cliBackendLog.info(`[ce-afterturn] ingested ${msgs.length} msgs (roles=${msgs.map((m) => m.role).join(",")})`);
+      }
+    }
+  } catch (err) {
+    cliBackendLog.warn(`[ce-afterturn] ${String(err)}`);
+  }
 }
 
 function failTurn(session: ClaudeLiveSession, error: unknown): void {
@@ -982,6 +1026,9 @@ export async function runClaudeLiveSessionTurn(params: {
       abort();
     } else {
       try {
+        if (liveSession.currentTurn) {
+          liveSession.currentTurn.userInput = params.prompt;
+        }
         await writeTurnInput(liveSession, params.prompt);
       } catch (error) {
         closeLiveSession(liveSession, "abort", error);
