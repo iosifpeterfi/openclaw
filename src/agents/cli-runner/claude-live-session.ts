@@ -331,6 +331,46 @@ function finishTurn(session: ClaudeLiveSession, output: CliOutput): void {
   void finalizeCliContextEngineTurn(session, turn, output);
 }
 
+/**
+ * Call the CE's assemble() before each CLI turn to prepend recalled
+ * context (knowledge graph facts, compressed conversation history)
+ * to the user's prompt. Returns the enriched prompt.
+ */
+async function assembleCliContextEngineContext(
+  session: ClaudeLiveSession,
+  prompt: string,
+): Promise<string> {
+  try {
+    const { resolveContextEngine } = await import("../../context-engine/registry.js");
+    const fs = await import("node:fs");
+    const configPath = `${process.env.HOME || "/home/node"}/.openclaw/openclaw.json`;
+    let cfg: Record<string, unknown> = {};
+    try {
+      cfg = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    } catch {
+      // no config available
+    }
+    const ce = await resolveContextEngine(cfg);
+    if (!ce || typeof ce.assemble !== "function") {
+      return prompt;
+    }
+    const result = await ce.assemble({
+      sessionId: session.key,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const addition = result?.systemPromptAddition;
+    if (addition && typeof addition === "string" && addition.trim()) {
+      cliBackendLog.info(
+        `[ce-assemble] injected ${addition.length} chars of context`,
+      );
+      return `${addition}\n\n${prompt}`;
+    }
+  } catch (err) {
+    cliBackendLog.warn(`[ce-assemble] ${String(err)}`);
+  }
+  return prompt;
+}
+
 async function finalizeCliContextEngineTurn(
   session: ClaudeLiveSession,
   turn: ClaudeLiveTurn,
@@ -1029,7 +1069,8 @@ export async function runClaudeLiveSessionTurn(params: {
         if (liveSession.currentTurn) {
           liveSession.currentTurn.userInput = params.prompt;
         }
-        await writeTurnInput(liveSession, params.prompt);
+        const enrichedPrompt = await assembleCliContextEngineContext(liveSession, params.prompt);
+        await writeTurnInput(liveSession, enrichedPrompt);
       } catch (error) {
         closeLiveSession(liveSession, "abort", error);
       }
