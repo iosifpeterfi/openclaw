@@ -661,6 +661,12 @@ async function handleSessionSend(params: {
     });
   }
 }
+// Cache for sessions.list: loadCombinedSessionStoreForGateway calls
+// resolveAllAgentSessionStoreTargetsSync which does readdirSync + realpathSync
+// on every call, blocking the event loop for seconds. Cache the store for 30s.
+let _sessionsStoreCache: { storePath: string; store: Record<string, import("../../config/sessions/types.js").SessionEntry>; ts: number } | null = null;
+const SESSIONS_STORE_CACHE_TTL_MS = 30_000;
+
 export const sessionsHandlers: GatewayRequestHandlers = {
   "sessions.list": async ({ params, respond, context }) => {
     if (!assertValidParams(params, validateSessionsListParams, "sessions.list", respond)) {
@@ -668,7 +674,15 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
     const p = params;
     const cfg = context.getRuntimeConfig();
-    const { storePath, store } = loadCombinedSessionStoreForGateway(cfg, { agentId: p.agentId });
+    const now = Date.now();
+    let storeResult: { storePath: string; store: Record<string, import("../../config/sessions/types.js").SessionEntry> };
+    if (_sessionsStoreCache && (now - _sessionsStoreCache.ts) < SESSIONS_STORE_CACHE_TTL_MS) {
+      storeResult = _sessionsStoreCache;
+    } else {
+      storeResult = loadCombinedSessionStoreForGateway(cfg, { agentId: p.agentId });
+      _sessionsStoreCache = { ...storeResult, ts: now };
+    }
+    const { storePath, store } = storeResult;
     const modelCatalog = await loadOptionalSessionsListModelCatalog(context);
     const result = await listSessionsFromStoreAsync({
       cfg,

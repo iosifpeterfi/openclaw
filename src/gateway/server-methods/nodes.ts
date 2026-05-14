@@ -716,29 +716,41 @@ export const nodeHandlers: GatewayRequestHandlers = {
       respond(true, { nodeId: updated.nodeId, displayName: updated.displayName }, undefined);
     });
   },
-  "node.list": async ({ params, respond, context }) => {
-    if (!validateNodeListParams(params)) {
-      respondInvalidParams({
-        respond,
-        method: "node.list",
-        validator: validateNodeListParams,
+  "node.list": (() => {
+    // Cache node.list to prevent repeated slow calls from dashboard
+    // reconnects starving the HTTP handler and Telegram polling.
+    let _cache: { ts: number; nodes: unknown[] } | null = null;
+    const CACHE_TTL_MS = 15_000;
+    return async ({ params, respond, context }: { params: unknown; respond: RespondFn; context: GatewayRequestContext }) => {
+      if (!validateNodeListParams(params)) {
+        respondInvalidParams({
+          respond,
+          method: "node.list",
+          validator: validateNodeListParams,
+        });
+        return;
+      }
+      const now = Date.now();
+      if (_cache && (now - _cache.ts) < CACHE_TTL_MS) {
+        respond(true, { ts: _cache.ts, nodes: _cache.nodes }, undefined);
+        return;
+      }
+      await respondUnavailableOnThrow(respond, async () => {
+        const [devicePairing, nodePairing] = await Promise.all([
+          listDevicePairing(),
+          listNodePairing(),
+        ]);
+        const catalog = createKnownNodeCatalog({
+          pairedDevices: devicePairing.paired,
+          pairedNodes: nodePairing.paired,
+          connectedNodes: context.nodeRegistry.listConnected(),
+        });
+        const nodes = listKnownNodes(catalog);
+        _cache = { ts: now, nodes };
+        respond(true, { ts: now, nodes }, undefined);
       });
-      return;
-    }
-    await respondUnavailableOnThrow(respond, async () => {
-      const [devicePairing, nodePairing] = await Promise.all([
-        listDevicePairing(),
-        listNodePairing(),
-      ]);
-      const catalog = createKnownNodeCatalog({
-        pairedDevices: devicePairing.paired,
-        pairedNodes: nodePairing.paired,
-        connectedNodes: context.nodeRegistry.listConnected(),
-      });
-      const nodes = listKnownNodes(catalog);
-      respond(true, { ts: Date.now(), nodes }, undefined);
-    });
-  },
+    };
+  })(),
   "node.describe": async ({ params, respond, context }) => {
     if (!validateNodeDescribeParams(params)) {
       respondInvalidParams({

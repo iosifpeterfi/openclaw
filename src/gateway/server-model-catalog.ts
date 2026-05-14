@@ -15,6 +15,8 @@ let lastSuccessfulCatalog: GatewayModelChoice[] | null = null;
 let inFlightRefresh: Promise<GatewayModelChoice[]> | null = null;
 let staleGeneration = 0;
 let appliedGeneration = 0;
+let deferredRefreshScheduled = false;
+const DEFERRED_CATALOG_REFRESH_DELAY_MS = 60_000;
 
 function resetGatewayModelCatalogState(): void {
   lastSuccessfulCatalog = null;
@@ -73,6 +75,17 @@ export async function __resetModelCatalogCacheForTest(): Promise<void> {
   resetModelCatalogCacheForTest();
 }
 
+// Seed catalog returned while the real (slow) Pi SDK probe runs in background.
+// registry.getAll() in model-catalog.ts blocks the event loop synchronously
+// for 25-35s on claude-cli providers; returning this seed immediately keeps
+// the event loop responsive during startup so Telegram polling and dashboard
+// WebSocket requests aren't starved.
+const SEED_CATALOG: GatewayModelChoice[] = [
+  { id: "opus", name: "Claude Opus", provider: "claude-cli" },
+  { id: "sonnet", name: "Claude Sonnet", provider: "claude-cli" },
+  { id: "haiku", name: "Claude Haiku", provider: "claude-cli" },
+];
+
 export async function loadGatewayModelCatalog(
   params?: LoadGatewayModelCatalogParams,
 ): Promise<GatewayModelChoice[]> {
@@ -87,7 +100,15 @@ export async function loadGatewayModelCatalog(
     return lastSuccessfulCatalog;
   }
   if (inFlightRefresh) {
-    return await inFlightRefresh;
+    // Return seed catalog immediately instead of awaiting the blocking probe.
+    // The in-flight refresh will update lastSuccessfulCatalog when it completes.
+    return SEED_CATALOG;
   }
-  return await startGatewayModelCatalogRefresh(params);
+  // Never run the blocking Pi SDK probe from the gateway event loop.
+  // registry.getAll() blocks for 25-35s synchronously, which freezes
+  // Telegram polling, WebSocket responses, and all async I/O.
+  // The seed catalog provides the known claude-cli models; the real
+  // catalog will be populated on the first successful agent turn
+  // (which runs in a child process, not on the gateway event loop).
+  return SEED_CATALOG;
 }

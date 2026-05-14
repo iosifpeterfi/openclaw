@@ -388,22 +388,31 @@ async function finalizeCliContextEngineTurn(
     }
     const ce = await resolveContextEngine(cfg);
     if (ce && typeof ce.afterTurn === "function") {
-      const msgs: Array<{ role: string; content: string }> = [];
-      if (turn.userInput) {
-        msgs.push({ role: "user", content: turn.userInput });
-      }
-      const text = (output as Record<string, unknown>).text ?? (output as Record<string, unknown>).content ?? "";
-      if (text) {
-        msgs.push({ role: "assistant", content: typeof text === "string" ? text : JSON.stringify(text) });
-      }
-      if (msgs.length > 0) {
-        await ce.afterTurn({
-          sessionId: session.key,
-          sessionKey: session.key,
-          messages: msgs,
-          prePromptMessageCount: 0,
-        });
-        cliBackendLog.info(`[ce-afterturn] ingested ${msgs.length} msgs (roles=${msgs.map((m) => m.role).join(",")})`);
+      // Skip CE afterTurn for internal sessions (cognee LLM calls, subagents)
+      // to prevent entity extraction prompts from polluting conversation history.
+      const sk = session.key;
+      const isInternal =
+        sk.includes(":openai:") || sk.includes(":cognee") || sk.includes(":subagent:");
+      if (isInternal) {
+        cliBackendLog.info(`[ce-afterturn] skipped internal session ${sk}`);
+      } else {
+        const msgs: Array<{ role: string; content: string }> = [];
+        if (turn.userInput) {
+          msgs.push({ role: "user", content: turn.userInput });
+        }
+        const text = (output as Record<string, unknown>).text ?? (output as Record<string, unknown>).content ?? "";
+        if (text) {
+          msgs.push({ role: "assistant", content: typeof text === "string" ? text : JSON.stringify(text) });
+        }
+        if (msgs.length > 0) {
+          await ce.afterTurn({
+            sessionId: session.key,
+            sessionKey: session.key,
+            messages: msgs,
+            prePromptMessageCount: 0,
+          });
+          cliBackendLog.info(`[ce-afterturn] ingested ${msgs.length} msgs (roles=${msgs.map((m) => m.role).join(",")})`);
+        }
       }
     }
   } catch (err) {
