@@ -318,9 +318,36 @@ function finishTurn(session: ClaudeLiveSession, output: CliOutput): void {
   if (!turn) {
     return;
   }
+  const durationMs = Date.now() - turn.startedAtMs;
+  const u = output.usage;
   cliBackendLog.info(
-    `claude live session turn: provider=${session.providerId} model=${session.modelId} durationMs=${Date.now() - turn.startedAtMs} rawLines=${turn.rawLines.length}`,
+    `claude live session turn: provider=${session.providerId} model=${session.modelId} durationMs=${durationMs} rawLines=${turn.rawLines.length}` +
+      (u ? ` inputTokens=${u.input ?? 0} outputTokens=${u.output ?? 0} cacheRead=${u.cacheRead ?? 0}` : ""),
   );
+
+  // Persist token usage to llm-usage.jsonl for the dashboard usage tab.
+  // Fire-and-forget — never block the turn on I/O.
+  if (u && (u.input || u.output)) {
+    try {
+      const fs = require("node:fs");
+      const usagePath = `${process.env.HOME || "/home/node"}/.openclaw/llm-usage.jsonl`;
+      const entry = JSON.stringify({
+        ts: new Date().toISOString(),
+        model: session.modelId || "unknown",
+        prompt_tokens: u.input ?? 0,
+        completion_tokens: u.output ?? 0,
+        cache_read: u.cacheRead ?? 0,
+        cache_write: u.cacheWrite ?? 0,
+        total_tokens: u.total ?? (u.input ?? 0) + (u.output ?? 0),
+        duration_ms: durationMs,
+        session_key: session.key,
+      });
+      fs.appendFileSync(usagePath, entry + "\n");
+    } catch {
+      // Never fail the turn on usage logging
+    }
+  }
+
   clearTurnTimers(turn);
   turn.streamingParser.finish();
   session.currentTurn = null;
