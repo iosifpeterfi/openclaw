@@ -360,7 +360,7 @@ const SAFE_MISSING_API_KEY_PROVIDERS = new Set(["anthropic", "google", "openai",
 const EXTERNAL_RUN_FAILURE_DETAIL_MAX_CHARS = 900;
 const AGENT_FAILED_BEFORE_REPLY_TEXT = "Agent failed before reply:";
 const GENERIC_EXTERNAL_RUN_FAILURE_TEXT =
-  "⚠️ Something went wrong while processing your request. Please try again, or use /new to start a fresh session.";
+  "⚠️ The model took too long to produce a response. Try sending a follow-up message asking about progress on your request.";
 
 type ExternalRunFailureReply = {
   text: string;
@@ -1989,7 +1989,7 @@ export async function runAgentTurnWithFallback(params: {
           : rateLimitOrOverloadedCopy
             ? rateLimitOrOverloadedCopy
             : isContextOverflow
-              ? "⚠️ Context overflow — prompt too large for this model. Try a shorter message or a larger-context model."
+              ? "⚠️ Context overflow — the prompt is too large for this model. Try /compact to compress the conversation history, or ask about progress on shorter tasks."
               : isRoleOrderingError
                 ? "⚠️ Message ordering conflict - please try again. If this persists, use /new to start a fresh session."
                 : shouldSurfaceToControlUi
@@ -2025,7 +2025,7 @@ export async function runAgentTurnWithFallback(params: {
       return {
         kind: "final",
         payload: {
-          text: "⚠️ Context overflow — this conversation is too large for the model. Use /new to start a fresh session.",
+          text: "⚠️ Context overflow — the conversation is too large for this model. Try /compact to compress the conversation history, or ask about progress on shorter tasks.",
         },
       };
     }

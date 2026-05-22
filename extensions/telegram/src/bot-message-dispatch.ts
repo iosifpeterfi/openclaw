@@ -1289,7 +1289,7 @@ export const dispatchTelegramMessage = async ({
       (deliverySummary.skippedNonSilent > 0 || deliverySummary.failedNonSilent > 0))
   ) {
     const fallbackText = dispatchError
-      ? "Something went wrong while processing your request. Please try again."
+      ? "The model took too long to respond. Try sending a follow-up message asking about progress."
       : EMPTY_RESPONSE_FALLBACK;
     const result = await (telegramDeps.deliverReplies ?? deliverReplies)({
       replies: [{ text: fallbackText }],
