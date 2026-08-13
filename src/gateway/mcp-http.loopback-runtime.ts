@@ -53,7 +53,16 @@ export type McpLoopbackToolCallCaptureHandle = {
   finished: boolean;
 };
 
-let activeRuntime: McpLoopbackRuntime | undefined;
+// clawbase patch: store on globalThis so duplicate-module-instance scenarios
+// (the bundler splits this module into several chunks) all share the same
+// runtime metadata. Without this, the cli-runner's prepare.ts can read a null
+// runtime even though the loopback is actually bound, then write a claude
+// mcp.json without the openclaw url.
+const RUNTIME_STATE_KEY = Symbol.for("openclaw.mcp.loopback.runtime");
+type RuntimeState = { value: McpLoopbackRuntime | undefined };
+const runtimeState: RuntimeState = ((globalThis as unknown as Record<symbol, RuntimeState>)[
+  RUNTIME_STATE_KEY
+] ??= { value: undefined });
 let nextToolCallCaptureGeneration = 0;
 const toolCallCaptures = new Map<string, McpLoopbackToolCallCapture>();
 
@@ -359,12 +368,12 @@ export function clearMcpLoopbackToolCallCapturesForTest(): void {
 
 /** Return a copy of the active loopback runtime, if one has been installed. */
 export function getActiveMcpLoopbackRuntime(): McpLoopbackRuntime | undefined {
-  return activeRuntime ? { ...activeRuntime } : undefined;
+  return runtimeState.value ? { ...runtimeState.value } : undefined;
 }
 
 /** Install the active loopback runtime used by in-process MCP callers. */
 export function setActiveMcpLoopbackRuntime(runtime: McpLoopbackRuntime): void {
-  activeRuntime = { ...runtime };
+  runtimeState.value = { ...runtime };
 }
 
 /** Choose the bearer token matching owner/non-owner caller identity. */
@@ -377,8 +386,8 @@ export function resolveMcpLoopbackBearerToken(
 
 /** Clear loopback runtime only when the owning token matches the active runtime. */
 export function clearActiveMcpLoopbackRuntimeByOwnerToken(ownerToken: string): void {
-  if (activeRuntime?.ownerToken === ownerToken) {
-    activeRuntime = undefined;
+  if (runtimeState.value?.ownerToken === ownerToken) {
+    runtimeState.value = undefined;
   }
 }
 
