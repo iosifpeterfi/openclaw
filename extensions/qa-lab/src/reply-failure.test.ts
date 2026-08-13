@@ -12,9 +12,9 @@ describe("extractQaFailureReplyText", () => {
   it("classifies the generic external fallback reply as a failure", () => {
     expect(
       extractQaFailureReplyText(
-        "⚠️ Something went wrong while processing your request. Please try again, or use /new to start a fresh session.",
+        "⚠️ The model took too long to produce a response. Try sending a follow-up message asking about progress on your request.",
       ),
-    ).toContain("Something went wrong while processing your request.");
+    ).toContain("The model took too long to respond.");
   });
 
   it("classifies explicit provider auth guidance as a failure", () => {

@@ -2825,7 +2825,7 @@ describe("dispatchTelegramMessage draft streaming", () => {
     expectDeliveredReply(
       0,
       {
-        text: "Something went wrong while processing your request. Please try again.",
+        text: "The model took too long to respond. Try sending a follow-up message asking about progress.",
       },
       1,
     );
@@ -2854,7 +2854,7 @@ describe("dispatchTelegramMessage draft streaming", () => {
     expectDeliveredReply(
       0,
       {
-        text: "Something went wrong while processing your request. Please try again.",
+        text: "The model took too long to respond. Try sending a follow-up message asking about progress.",
       },
       1,
     );

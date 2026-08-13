@@ -16,13 +16,13 @@ describe("qa suite transport helpers", () => {
     const state = createQaBusState();
     state.addOutboundMessage({
       to: "dm:qa-operator",
-      text: "⚠️ Something went wrong while processing your request. Please try again, or use /new to start a fresh session.",
+      text: "⚠️ The model took too long to produce a response. Try sending a follow-up message asking about progress on your request.",
       senderId: "openclaw",
       senderName: "OpenClaw QA",
     });
 
     const message = findFailureOutboundMessage(state);
-    expect(message?.text).toContain("Something went wrong while processing your request.");
+    expect(message?.text).toContain("The model took too long to respond.");
   });
 
   it("fails success-only waitForOutboundMessage calls when a classified failure reply arrives first", async () => {

@@ -953,7 +953,7 @@ export function createMSTeamsMessageHandler(deps: MSTeamsMessageHandlerDeps) {
       log.error("dispatch failed", { error: formatUnknownError(err) });
       runtime.error(`msteams dispatch failed: ${formatUnknownError(err)}`);
       try {
-        await context.sendActivity("⚠️ Something went wrong. Please try again.");
+        await context.sendActivity("⚠️ The model took too long to respond. Try sending a follow-up message asking about progress.");
       } catch {
         // Best effort.
       }

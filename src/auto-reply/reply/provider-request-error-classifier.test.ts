@@ -149,14 +149,14 @@ describe("provider request error classifier", () => {
     ["cause statusCode", { cause: { statusCode: 429 } }],
   ])("classifies generic HTTP 429 errors from %s metadata", (_label, metadata) => {
     const error = new Error(
-      "Something went wrong while processing your request. Please try again.",
+      "The model took too long to respond. Try sending a follow-up message asking about progress.",
     );
     Object.assign(error, metadata);
 
     expect(classifyProviderRequestError(error)).toEqual({
       code: "provider_rate_limit_or_quota_error",
       userMessage: PROVIDER_RATE_LIMIT_OR_QUOTA_ERROR_USER_MESSAGE,
-      technicalMessage: "Something went wrong while processing your request. Please try again.",
+      technicalMessage: "The model took too long to respond. Try sending a follow-up message asking about progress.",
     });
   });
 

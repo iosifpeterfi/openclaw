@@ -268,7 +268,7 @@ export const createTelegramMessageProcessor = (deps: TelegramMessageProcessorDep
           try {
             await bot.api.sendMessage(
               context.chatId,
-              "Something went wrong while processing your request. Please try again.",
+              "The model took too long to respond. Try sending a follow-up message asking about progress.",
               buildTelegramThreadParams(context.threadSpec),
             );
           } catch {}

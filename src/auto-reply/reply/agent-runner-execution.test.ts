@@ -58,7 +58,7 @@ const state = vi.hoisted(() => ({
 }));
 
 const GENERIC_RUN_FAILURE_TEXT =
-  "⚠️ Something went wrong while processing your request. Please try again, or use /new to start a fresh session.";
+  "⚠️ The model took too long to produce a response. Try sending a follow-up message asking about progress on your request.";
 const EMPTY_INTERACTIVE_REPLY_TEXT =
   "I finished the turn, but it did not produce a visible reply. Please try again, or start a new session if this keeps happening.";
 
@@ -7279,7 +7279,7 @@ describe("runAgentTurnWithFallback", () => {
 
   it("surfaces provider quota guidance for generic HTTP 429 failures before reply", async () => {
     const error = new Error(
-      "Something went wrong while processing your request. Please try again.",
+      "The model took too long to respond. Try sending a follow-up message asking about progress.",
     );
     Object.assign(error, { status: 429 });
     state.runEmbeddedAgentMock.mockRejectedValueOnce(error);

@@ -749,7 +749,7 @@ export const registerTelegramHandlers = ({
         void bot.api
           .sendMessage(
             chatId,
-            "Something went wrong while processing your message. Please try again.",
+            "The model took too long to respond. Try sending a follow-up message asking about progress.",
             threadId != null ? { message_thread_id: threadId } : undefined,
           )
           .catch((sendErr: unknown) => {

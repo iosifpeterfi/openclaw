@@ -815,8 +815,11 @@ function isNonDirectConversationContext(ctx: ExternalFailureConversationContext)
   return chatType === "group" || chatType === "channel";
 }
 
-function isVerboseFailureDetailEnabled(level: VerboseLevel | undefined): boolean {
-  return level === "on" || level === "full";
+function isVerboseFailureDetailEnabled(_level: VerboseLevel | undefined): boolean {
+  // clawbase: always surface the underlying failure detail. Managed-hosting
+  // users cannot read gateway logs, so a bare "something went wrong" leaves
+  // them with nothing actionable and generates support load.
+  return true;
 }
 
 function resolveExternalRunFailureTextForConversation(params: {
@@ -954,7 +957,8 @@ function formatForwardedExternalRunFailureText(message: string): string {
       ? `${sanitized.slice(0, EXTERNAL_RUN_FAILURE_DETAIL_MAX_CHARS - 1).trimEnd()}…`
       : sanitized;
   const suffix = /[.!?]$/u.test(detail) ? "" : ".";
-  return `⚠️ Agent failed before reply: ${detail}${suffix} Please try again, or use /new to start a fresh session.`;
+  // clawbase: lead with the actual error; drop the boilerplate retry advice.
+  return `⚠️ Agent failed: ${detail}${suffix}`;
 }
 
 function supportsChannelCodexLogin(provider: string | null | undefined): boolean {
@@ -3469,7 +3473,7 @@ async function runAgentTurnWithFallbackInternal(
           : rateLimitOrOverloadedCopy
             ? rateLimitOrOverloadedCopy
             : isContextOverflow
-              ? "⚠️ Context overflow — prompt too large for this model. Try a shorter message or a larger-context model."
+              ? "⚠️ Context overflow — the prompt is too large for this model. Try /compact to compress the conversation history, or ask about progress on shorter tasks."
               : shouldSurfaceToControlUi
                 ? `⚠️ Agent failed before reply: ${trimmedMessage}.\nLogs: openclaw logs --follow`
                 : (externalRunFailureReply?.text ?? genericFallbackText);
@@ -3539,7 +3543,7 @@ async function runAgentTurnWithFallbackInternal(
       return {
         kind: "final",
         payload: markAgentRunFailureReplyPayload({
-          text: "⚠️ Context overflow — this conversation is too large for the model. Use /new to start a fresh session.",
+          text: "⚠️ Context overflow — the conversation is too large for this model. Try /compact to compress the conversation history, or ask about progress on shorter tasks.",
         }),
       };
     }

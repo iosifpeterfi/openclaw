@@ -1,6 +1,9 @@
 // Centralizes user-facing failure copy for external agent runner errors.
+// clawbase: the dominant real-world cause of this path is a long-running turn
+// hitting the watchdog, not a crash. Point users at asking for progress instead
+// of telling them to throw away the session with /new.
 export const GENERIC_EXTERNAL_RUN_FAILURE_TEXT =
-  "⚠️ Something went wrong while processing your request. Please try again, or use /new to start a fresh session.";
+  "⚠️ The model took too long to produce a response. Try sending a follow-up message asking about progress on your request.";
 
 export const HEARTBEAT_EXTERNAL_RUN_FAILURE_TEXT =
   "⚠️ Heartbeat check failed before it could produce an update. The main chat session remains available.";

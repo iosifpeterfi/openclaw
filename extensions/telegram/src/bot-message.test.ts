@@ -282,7 +282,7 @@ describe("telegram bot message processor", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       123,
-      "Something went wrong while processing your request. Please try again.",
+      "The model took too long to respond. Try sending a follow-up message asking about progress.",
       { message_thread_id: 456 },
     );
     expect(runtimeError).toHaveBeenCalledWith(
@@ -770,7 +770,7 @@ describe("telegram bot message processor", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       123,
-      "Something went wrong while processing your request. Please try again.",
+      "The model took too long to respond. Try sending a follow-up message asking about progress.",
       undefined,
     );
   });
@@ -790,7 +790,7 @@ describe("telegram bot message processor", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       123,
-      "Something went wrong while processing your request. Please try again.",
+      "The model took too long to respond. Try sending a follow-up message asking about progress.",
       undefined,
     );
     expect(runtimeError).toHaveBeenCalledWith(

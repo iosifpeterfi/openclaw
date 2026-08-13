@@ -558,7 +558,7 @@ describe("runQaCharacterEval", () => {
         outputDir: params.outputDir,
         model: params.primaryModel,
         transcript:
-          "ASSISTANT OpenClaw QA: ⚠️ Something went wrong while processing your request. Please try again, or use /new to start a fresh session.",
+          "ASSISTANT OpenClaw QA: ⚠️ The model took too long to produce a response. Try sending a follow-up message asking about progress on your request.",
       }),
     );
     const runJudge = makeRunJudge([
