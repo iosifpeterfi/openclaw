@@ -2,6 +2,7 @@
  * Manages reusable Claude CLI stdio sessions for CLI-backed agent turns.
  */
 import crypto from "node:crypto";
+import fs from "node:fs";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import type { ReplyBackendHandle } from "../../auto-reply/reply/reply-run-registry.js";
 import type { CliBackendConfig } from "../../config/types.js";
@@ -397,9 +398,36 @@ function finishTurn(session: ClaudeLiveSession, output: CliOutput): void {
   if (!turn) {
     return;
   }
+  const durationMs = Date.now() - turn.startedAtMs;
+  const u = output.usage;
   cliBackendLog.info(
-    `claude live session turn: provider=${session.providerId} model=${session.modelId} durationMs=${Date.now() - turn.startedAtMs} rawLines=${turn.rawLines.length} ${formatCliBackendOutputDigest(output.text)}`,
+    `claude live session turn: provider=${session.providerId} model=${session.modelId} durationMs=${durationMs} rawLines=${turn.rawLines.length} ${formatCliBackendOutputDigest(output.text)}` +
+      (u ? ` inputTokens=${u.input ?? 0} outputTokens=${u.output ?? 0} cacheRead=${u.cacheRead ?? 0}` : ""),
   );
+
+  // clawbase: persist per-turn token usage to llm-usage.jsonl. OAuth-based
+  // (subscription) agents never write usage into the session JSONL, so this is
+  // the only source the ClawBase usage/billing dashboard can read.
+  // Fire-and-forget — never block or fail a turn on usage logging.
+  if (u && (u.input || u.output)) {
+    try {
+      const usagePath = `${process.env.HOME || "/home/node"}/.openclaw/llm-usage.jsonl`;
+      const entry = JSON.stringify({
+        ts: new Date().toISOString(),
+        model: session.modelId || "unknown",
+        prompt_tokens: u.input ?? 0,
+        completion_tokens: u.output ?? 0,
+        cache_read: u.cacheRead ?? 0,
+        cache_write: u.cacheWrite ?? 0,
+        total_tokens: u.total ?? (u.input ?? 0) + (u.output ?? 0),
+        duration_ms: durationMs,
+        session_key: session.key,
+      });
+      fs.appendFileSync(usagePath, `${entry}\n`);
+    } catch {
+      // Never fail the turn on usage logging.
+    }
+  }
   turn.streamingParser.finish();
   failActiveClaudeLiveTools(turn, new Error("Tool result missing before turn completed"));
   clearTurnTimers(turn);
