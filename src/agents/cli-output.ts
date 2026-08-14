@@ -1266,9 +1266,15 @@ export function createCliJsonlStreamingParser(params: {
           console.error("[cli-stream-debug] assistant turn boundary -> rotate message");
         }
         if (params.onAssistantMessageStart) {
-          void Promise.resolve(params.onAssistantMessageStart()).catch(() => {
-            // Never let a reply-pipeline error break CLI parsing.
-          });
+          // try/catch as well as .catch(): a synchronous throw in the callback
+          // would otherwise escape here and abort parsing of the CLI stream.
+          try {
+            void Promise.resolve(params.onAssistantMessageStart()).catch(() => {
+              // Never let a reply-pipeline error break CLI parsing.
+            });
+          } catch {
+            // Same, for a callback that throws synchronously.
+          }
         }
       }
       seenFirstAssistantRecord = true;
