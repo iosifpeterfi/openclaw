@@ -1086,9 +1086,12 @@ export function createCliJsonlStreamingParser(params: {
   onToolUseStart?: (delta: CliToolUseStartDelta) => void;
   onToolResult?: (delta: CliToolResultDelta) => void;
   onCommentaryText?: (text: string) => void;
+  /** clawbase: fired at each assistant-turn boundary (see RunCliAgentParams). */
+  onAssistantMessageStart?: () => void | Promise<void>;
 }) {
   let lineBuffer = "";
   let assistantText = "";
+  let seenFirstAssistantRecord = false;
   let pendingClaudeText = "";
   let sessionId: string | undefined;
   let usage: CliUsage | undefined;
@@ -1248,6 +1251,27 @@ export function createCliJsonlStreamingParser(params: {
       console.error(
         `[cli-stream-debug] type=${recordType} event=${eventType ?? "-"} delta=${String(deltaType ?? "-")} textSoFar=${assistantText.length}`,
       );
+    }
+
+    // clawbase: assistant-turn boundary. Claude CLI emits one top-level
+    // `type: "assistant"` record per completed turn (one API call between tool
+    // invocations). On every turn after the first, reset the text accumulator
+    // and notify the reply pipeline, so a channel that edits a draft message
+    // rotates to a fresh one instead of rewriting the same draft with
+    // ever-growing cumulative text.
+    if (recordType === "assistant") {
+      if (seenFirstAssistantRecord) {
+        assistantText = "";
+        if (process.env.OPENCLAW_CLI_STREAM_DEBUG === "1") {
+          console.error("[cli-stream-debug] assistant turn boundary -> rotate message");
+        }
+        if (params.onAssistantMessageStart) {
+          void Promise.resolve(params.onAssistantMessageStart()).catch(() => {
+            // Never let a reply-pipeline error break CLI parsing.
+          });
+        }
+      }
+      seenFirstAssistantRecord = true;
     }
 
     const delta = parseClaudeCliStreamingDelta({

@@ -1517,6 +1517,7 @@ export async function executePreparedCliRun(
             ? createCliJsonlStreamingParser({
                 backend,
                 providerId: context.backendResolved.id,
+                onAssistantMessageStart: params.onAssistantMessageStart,
                 onAssistantDelta: emitCliAssistantDelta,
                 onThinkingDelta: emitCliThinkingDelta,
                 onThinkingProgress: emitCliThinkingProgress,

@@ -164,6 +164,15 @@ export type RunCliAgentParams = {
   cleanupBundleMcpOnRunEnd?: boolean;
   /** Mark explicit one-shot local CLI runs so plugin tools can release resources promptly. */
   oneShotCliRun?: boolean;
+  /**
+   * clawbase: fired at each assistant-turn boundary inside a single CLI run.
+   * Claude CLI emits one top-level `type: "assistant"` record per API call
+   * between tool invocations, and the streaming parser accumulates text across
+   * the whole run. Without a boundary signal a channel that edits a draft
+   * message (Telegram) keeps rewriting one message with ever-growing
+   * cumulative text; this lets the reply pipeline rotate to a fresh message.
+   */
+  onAssistantMessageStart?: () => void | Promise<void>;
 };
 
 /** Backend config after MCP, skill, env, and cleanup preparation. */

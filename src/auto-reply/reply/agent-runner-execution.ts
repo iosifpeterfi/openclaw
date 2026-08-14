@@ -2549,6 +2549,13 @@ async function runAgentTurnWithFallbackInternal(
                       params.followupRun.originatingTo ??
                       params.sessionCtx.OriginatingTo ??
                       params.sessionCtx.To,
+                    // clawbase: rotate the channel draft at each assistant-turn
+                    // boundary so Telegram posts a fresh message per turn
+                    // instead of editing one draft with cumulative text.
+                    onAssistantMessageStart: async () => {
+                      await params.typingSignals.signalMessageStart();
+                      await params.opts?.onAssistantMessageStart?.();
+                    },
                     senderId: params.followupRun.run.senderId,
                     chatId: params.followupRun.originatingChatId,
                     channelContext: params.followupRun.run.channelContext,
