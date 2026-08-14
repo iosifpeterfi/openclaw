@@ -93,6 +93,7 @@ export function startChannelHealthMonitor(deps: ChannelHealthMonitorDeps): Chann
   let stopped = false;
   let checkInFlight = false;
   let timer: ReturnType<typeof setInterval> | null = null;
+  let earlyTimer: ReturnType<typeof setTimeout> | null = null;
   const suppressedAccounts = new Set<string>();
 
   const rKey = (channelId: string, accountId: string) => `${channelId}:${accountId}`;
@@ -224,6 +225,10 @@ export function startChannelHealthMonitor(deps: ChannelHealthMonitorDeps): Chann
       clearInterval(timer);
       timer = null;
     }
+    if (earlyTimer) {
+      clearTimeout(earlyTimer);
+      earlyTimer = null;
+    }
     abortSignal?.removeEventListener("abort", stop);
   }
 
@@ -231,12 +236,26 @@ export function startChannelHealthMonitor(deps: ChannelHealthMonitorDeps): Chann
     stopped = true;
   } else {
     abortSignal?.addEventListener("abort", stop, { once: true });
+    // clawbase: fire one early check just past the startup grace window.
+    // Without it, a channel that never started at boot (e.g. the
+    // plugin/harness registration race that reports "Requested agent harness
+    // 'claude-cli' is not registered") waits a full checkIntervalMs — 5 min on
+    // default settings — before the first interval-driven check picks it up.
+    // Users feel that as "WhatsApp linked but not receiving messages" right
+    // after a fresh provision or a pair-link cycle. The early check is safe:
+    // channels that did start are still inside channel-connect-grace and are
+    // evaluated as healthy, so it only catches "never started" channels.
+    const earlyCheckDelayMs = timing.monitorStartupGraceMs + 5_000;
+    earlyTimer = setTimeout(() => void runCheck(), earlyCheckDelayMs);
+    if (typeof earlyTimer === "object" && "unref" in earlyTimer) {
+      earlyTimer.unref();
+    }
     timer = setInterval(() => void runCheck(), checkIntervalMs);
     if (typeof timer === "object" && "unref" in timer) {
       timer.unref();
     }
     log.info?.(
-      `started (interval: ${Math.round(checkIntervalMs / 1000)}s, startup-grace: ${Math.round(timing.monitorStartupGraceMs / 1000)}s, channel-connect-grace: ${Math.round(timing.channelConnectGraceMs / 1000)}s)`,
+      `started (interval: ${Math.round(checkIntervalMs / 1000)}s, startup-grace: ${Math.round(timing.monitorStartupGraceMs / 1000)}s, channel-connect-grace: ${Math.round(timing.channelConnectGraceMs / 1000)}s, early-check: ${Math.round(earlyCheckDelayMs / 1000)}s)`,
     );
   }
 

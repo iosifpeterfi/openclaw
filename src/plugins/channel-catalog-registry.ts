@@ -16,6 +16,37 @@ export type PluginChannelCatalogEntry = {
   install?: PluginPackageInstall;
 };
 
+// clawbase: memoize the discovery result.
+//
+// discoverOpenClawPlugins + per-plugin loadPluginManifest spend ~50% of total
+// CPU in synchronous filesystem syscalls (lstat, readdir, realpath, existsSync)
+// walking 100+ plugin directories. The provider-auth resolution path
+// (hasRuntimeAvailableProviderAuth -> resolveProviderOwners -> ... ->
+// applyPluginAutoEnable) reaches this function on every probe, so each health
+// refresh cycle re-scans the whole plugin tree. Inspector CPU profiling on the
+// 2026.5.2 gateway captured 80-90s event-loop blocks dominated by this stack.
+//
+// Upstream's reload-plugins action invalidates plugin state on real config
+// change, which is correct but does not address periodic re-discovery during
+// steady state.
+//
+// The cache is keyed on every input that can change the result. Calls that pass
+// an explicit `discovery` or `installRecords` override bypass the cache
+// entirely, since those callers supply their own inputs and must not observe a
+// shared snapshot. OPENCLAW_CHANNEL_CATALOG_DISABLE_CACHE=1 disables it for
+// debugging and test isolation.
+const channelCatalogCache = new Map<string, PluginChannelCatalogEntry[]>();
+
+function isChannelCatalogCacheDisabled(): boolean {
+  const raw = process.env.OPENCLAW_CHANNEL_CATALOG_DISABLE_CACHE;
+  return raw === "1" || raw === "true";
+}
+
+/** Invalidate the catalog cache (plugin install/uninstall, auto-enable changes). */
+export function clearChannelCatalogCache(): void {
+  channelCatalogCache.clear();
+}
+
 export function listChannelCatalogEntries(
   params: {
     origin?: PluginOrigin;
@@ -31,6 +62,34 @@ export function listChannelCatalogEntries(
     installRecords?: Record<string, PluginInstallRecord>;
     discovery?: PluginDiscoveryResult;
   } = {},
+): PluginChannelCatalogEntry[] {
+  // Only the plain discovery path is cacheable (see comment above).
+  // A caller-supplied env changes discovery inputs and is not worth hashing, so
+  // those calls (tests, mostly) bypass the cache too.
+  const cacheable =
+    !isChannelCatalogCacheDisabled() && !params.discovery && !params.installRecords && !params.env;
+  const cacheKey = cacheable
+    ? JSON.stringify({
+        origin: params.origin ?? null,
+        workspaceDir: params.workspaceDir ?? null,
+        extraPaths: params.extraPaths ?? null,
+      })
+    : undefined;
+  if (cacheKey !== undefined) {
+    const cached = channelCatalogCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+  const entries = buildChannelCatalogEntries(params);
+  if (cacheKey !== undefined) {
+    channelCatalogCache.set(cacheKey, entries);
+  }
+  return entries;
+}
+
+function buildChannelCatalogEntries(
+  params: Parameters<typeof listChannelCatalogEntries>[0] = {},
 ): PluginChannelCatalogEntry[] {
   const installRecords = resolveInstallRecords(params);
   const discovery =
